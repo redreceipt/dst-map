@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Permanent DST vs. Standard Time: Interactive Sunlight Map</title>
-<meta name="description" content="Drag a 24-hour clock and see where it's light or dark across the U.S. under permanent Daylight Saving Time vs. permanent Standard Time, for any day of the year.">
+<title>DST Map: Switching Clocks vs. Always Standard vs. Always Daylight</title>
+<meta name="description" content="Drag a 24-hour clock and see where it's light or dark across the U.S. under today's twice-a-year clock switch, permanent Standard Time, or permanent Daylight Saving Time, on any day of the year.">
 <link rel="canonical" href="https://dstmap.us/">
 <meta name="theme-color" content="#0b1126">
 <meta name="color-scheme" content="dark">
@@ -13,19 +13,19 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="DST Map">
 <meta property="og:url" content="https://dstmap.us/">
-<meta property="og:title" content="Permanent DST vs. Standard Time: see who wakes up in the dark">
-<meta property="og:description" content="Same clock time, every time zone. Drag the clock to compare sunlight across the U.S. under each proposal.">
+<meta property="og:title" content="Keep switching the clocks, or lock them? See who wakes up in the dark.">
+<meta property="og:description" content="Compare today's twice-a-year switch with permanent Standard Time and permanent Daylight Saving Time, at the same clock time in every U.S. time zone.">
 <meta property="og:image" content="https://dstmap.us/og.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="U.S. map at 8:00 AM on December 21 under permanent DST: Michigan, Indiana and western parts of each time zone are still dark.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Permanent DST vs. Standard Time: see who wakes up in the dark">
-<meta name="twitter:description" content="Same clock time, every time zone. Drag the clock to compare sunlight across the U.S.">
+<meta name="twitter:title" content="Keep switching the clocks, or lock them? See who wakes up in the dark.">
+<meta name="twitter:description" content="Compare today's clock switch with permanent Standard Time and permanent Daylight Saving Time across the U.S.">
 <meta name="twitter:image" content="https://dstmap.us/og.jpg">
 <meta name="twitter:image:alt" content="U.S. map at 8:00 AM on December 21 under permanent DST: Michigan, Indiana and western parts of each time zone are still dark.">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Permanent DST vs. Standard Time: Interactive Sunlight Map","url":"https://dstmap.us/","applicationCategory":"EducationalApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Michael Neeley","url":"https://redreceipt.github.io/"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"DST Map: Switching Clocks vs. Always Standard vs. Always Daylight","url":"https://dstmap.us/","applicationCategory":"EducationalApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Michael Neeley","url":"https://redreceipt.github.io/"}}</script>
 <style>
   :root { --panel: rgba(17, 23, 46, .66); --line: rgba(255,255,255,.11); --text: #eef1fb; --muted: #97a2c4; --sun: #ffc65c; --scrim: 6, 9, 22; }
   * { box-sizing: border-box; }
@@ -47,12 +47,11 @@
   h1 em { font-style: normal; background: linear-gradient(90deg, #ffd98a, #ff9f43); -webkit-background-clip: text; background-clip: text; color: transparent; }
   header > div:first-child { flex: 1 1 320px; }
   .sub { margin: 8px 0 0; color: var(--muted); max-width: 480px; text-shadow: 0 1px 10px rgba(0,0,0,.6); }
-  .card { width: 340px; max-width: 100%; padding: 14px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line);
+  .card { width: 364px; max-width: 100%; padding: 14px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
   .seg { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: rgba(0,0,0,.32); }
-  .seg button { flex: 1; display: grid; gap: 1px; white-space: nowrap; padding: 7px 6px; border: 0; border-radius: 9px; background: none; color: var(--muted);
-    font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: .2s; }
-  .seg button small { font-size: 11px; font-weight: 550; opacity: .75; }
+  .seg button { flex: 1 auto; white-space: nowrap; padding: 9px 6px; border: 0; border-radius: 9px; background: none; color: var(--muted);
+    font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; transition: .2s; }
   .seg button:hover { color: var(--text); }
   .note { margin: 10px 2px 0; font-size: 12px; color: var(--muted); }
   .note b { color: var(--text); font-weight: 650; }
@@ -107,7 +106,7 @@
   @media (max-width: 720px) {
     header { padding: 16px 16px 28px; } footer { padding: 28px 12px 12px; }
     .card { width: 100%; }
-    .seg button { font-size: 13px; padding: 6px 4px; }
+    .seg button { padding: 8px 4px; }
     .dock { grid-template-columns: auto 1fr; gap: 10px 14px; padding: 12px 14px; }
     .dock .slider { grid-column: 1 / -1; }
     #reset { right: 12px; }
@@ -115,7 +114,7 @@
   #stage:not(.labels) .city text { display: none; }
   @media (max-height: 560px) {
     header { padding-top: 10px; padding-bottom: 12px; } h1 { font-size: 20px; } .sub, .legend, .credit { display: none; }
-    .card { width: 300px; padding: 8px 10px; } .seg button { padding: 4px; } .seg small, .note { display: none; } .row { margin-top: 6px; }
+    .card { width: 340px; padding: 8px 10px; } .seg button { padding: 6px 4px; } .note { display: none; } .row { margin-top: 6px; }
     footer { padding-top: 16px; padding-bottom: 8px; } .dock { padding: 6px 14px; gap: 12px; } #clock { font-size: 24px; } #play { width: 38px; height: 38px; }
   }
 </style>
@@ -123,14 +122,14 @@
 <body>
 <header>
   <div>
-    <h1>Permanent <em>Daylight Saving</em><br>vs. Standard Time</h1>
-    <p class="sub">Drag the clock. It's the same local time in every time zone, so you can see who's in daylight and who's in the dark. Pinch or scroll to zoom.</p>
+    <h1>Keep switching,<br>or <em>lock the clock</em>?</h1>
+    <p class="sub">Compare today's twice-a-year switch with always-standard and always-daylight time. Drag the clock to see who's in daylight and who's in the dark at the same local time. Pinch or scroll to zoom.</p>
   </div>
   <div class="card">
     <div class="seg" role="group" aria-label="Clock policy">
-      <button data-mode="now">Today<small>switch twice a year</small></button>
-      <button data-mode="std">Standard<small>permanent</small></button>
-      <button data-mode="dst">Daylight<small>permanent</small></button>
+      <button data-mode="now">Switching</button>
+      <button data-mode="std">Always Standard</button>
+      <button data-mode="dst">Always Daylight</button>
     </div>
     <p class="note" id="note"></p>
     <label class="row" for="date"><span>Date</span><output id="dateOut"></output></label>

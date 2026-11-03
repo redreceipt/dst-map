@@ -1,4 +1,4 @@
-# Permanent DST vs. Standard Time
+# DST Map: keep switching, or lock the clock?
 
 Interactive map of U.S. sunlight at the same local clock time in every time zone. Drag the clock, pick a date, and compare today's twice-a-year switch with permanent Standard Time or permanent Daylight Saving Time.
 
