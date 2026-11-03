@@ -50,9 +50,12 @@
   .card { width: 340px; max-width: 100%; padding: 14px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
   .seg { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: rgba(0,0,0,.32); }
-  .seg button { flex: 1; white-space: nowrap; padding: 9px 12px; border: 0; border-radius: 9px; background: none; color: var(--muted);
+  .seg button { flex: 1; display: grid; gap: 1px; white-space: nowrap; padding: 7px 6px; border: 0; border-radius: 9px; background: none; color: var(--muted);
     font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: .2s; }
+  .seg button small { font-size: 11px; font-weight: 550; opacity: .75; }
   .seg button:hover { color: var(--text); }
+  .note { margin: 10px 2px 0; font-size: 12px; color: var(--muted); }
+  .note b { color: var(--text); font-weight: 650; }
   .seg button[aria-pressed="true"] { color: #1e1304; background: linear-gradient(180deg, #ffd884, #f6a53a); box-shadow: 0 3px 14px rgba(246,165,58,.4); }
   .row { display: flex; justify-content: space-between; margin: 14px 2px 2px; font-size: 13px; color: var(--muted); }
   .row output { color: var(--text); font-weight: 650; }
@@ -104,7 +107,7 @@
   @media (max-width: 720px) {
     header { padding: 16px 16px 28px; } footer { padding: 28px 12px 12px; }
     .card { width: 100%; }
-    .seg button { font-size: 13px; padding: 8px 6px; }
+    .seg button { font-size: 13px; padding: 6px 4px; }
     .dock { grid-template-columns: auto 1fr; gap: 10px 14px; padding: 12px 14px; }
     .dock .slider { grid-column: 1 / -1; }
     #reset { right: 12px; }
@@ -112,7 +115,7 @@
   #stage:not(.labels) .city text { display: none; }
   @media (max-height: 560px) {
     header { padding-top: 10px; padding-bottom: 12px; } h1 { font-size: 20px; } .sub, .legend, .credit { display: none; }
-    .card { width: 300px; padding: 8px 10px; } .seg button { padding: 6px 8px; } .row { margin-top: 6px; }
+    .card { width: 300px; padding: 8px 10px; } .seg button { padding: 4px; } .seg small, .note { display: none; } .row { margin-top: 6px; }
     footer { padding-top: 16px; padding-bottom: 8px; } .dock { padding: 6px 14px; gap: 12px; } #clock { font-size: 24px; } #play { width: 38px; height: 38px; }
   }
 </style>
@@ -125,9 +128,11 @@
   </div>
   <div class="card">
     <div class="seg" role="group" aria-label="Clock policy">
-      <button data-mode="std">Permanent Standard</button>
-      <button data-mode="dst">Permanent DST</button>
+      <button data-mode="now">Today<small>switch twice a year</small></button>
+      <button data-mode="std">Standard<small>permanent</small></button>
+      <button data-mode="dst">Daylight<small>permanent</small></button>
     </div>
+    <p class="note" id="note"></p>
     <label class="row" for="date"><span>Date</span><output id="dateOut"></output></label>
     <input id="date" type="range" min="1" max="365" value="355">
     <div class="legend">
@@ -169,7 +174,7 @@
       <div class="ticks"><span>12a</span><span>3a</span><span>6a</span><span>9a</span><span>12p</span><span>3p</span><span>6p</span><span>9p</span><span>12a</span></div>
     </div>
   </div>
-  <p class="credit">Sun position: NOAA solar equations · Map: U.S. Census via us-atlas · Dashed lines: time zone borders · Arizona &amp; Hawaii stay on standard time either way</p>
+  <p class="credit">Sun position: NOAA solar equations · Map: U.S. Census via us-atlas · Dashed lines: time zone borders · Arizona &amp; Hawaii stay on standard time in every mode</p>
 </footer>
 
 <script type="module">
@@ -178,7 +183,7 @@ import { feature, mesh } from "https://cdn.jsdelivr.net/npm/topojson-client@3/+e
 import { zoom, zoomIdentity } from "https://cdn.jsdelivr.net/npm/d3-zoom@3/+esm";
 // Same pinned URL d3-zoom imports, so there is one d3-selection instance (with d3-transition attached).
 import { select } from "https://cdn.jsdelivr.net/npm/d3-selection@3.0.1/+esm";
-import { RAD, RISE, BASE, CENTER, ZONES, zoneOf, fixZone, offsetOf, sun, hourAngle0 } from "./sun.js";
+import { RAD, RISE, BASE, CENTER, ZONES, zoneOf, fixZone, offsetOf, dstOn, DST_START, DST_END, sun, hourAngle0 } from "./sun.js";
 
 const $ = s => document.querySelector(s);
 const path = geoPath(geoAlbersUsa().scale(BASE).translate(CENTER));
@@ -189,7 +194,7 @@ const CITIES = [["Seattle", -122.33, 47.61], ["San Francisco", -122.42, 37.77], 
   ["Detroit", -83.05, 42.33], ["Atlanta", -84.39, 33.75], ["Miami", -80.19, 25.76], ["Washington", -77.04, 38.9, 1], ["New York", -74.0, 40.71],
   ["Boston", -71.06, 42.36], ["Anchorage", -149.9, 61.22], ["Honolulu", -157.86, 21.31]];
 
-let mode = "dst", minutes = 480, doy = 355, sunNow = sun(doy), hover, playing = false, gesturing = false;
+let mode = "now", minutes = 480, doy = 355, sunNow = sun(doy), hover, playing = false, gesturing = false;
 // Map transforms are {k, x, y}: screen = k·p + (x, y) for a point p in unzoomed (975×610) units.
 let fit, current = zoomIdentity, rendered;
 const stage = $("#stage"), tip = $("#tip"), shade = $("#shade");
@@ -217,7 +222,7 @@ const stateName = new Map(feature(us, us.objects.states).features.map(f => [f.id
 $("#nation").setAttribute("d", path(nation));
 $(".states").setAttribute("d", path(mesh(us, us.objects.states, (a, b) => a !== b)));
 const drawZoneLines = () => $(".zones").setAttribute("d", path(mesh(us, us.objects.counties,
-  (a, b) => a !== b && offsetOf(zoneOf(a.id), mode) !== offsetOf(zoneOf(b.id), mode))));
+  (a, b) => a !== b && offsetOf(zoneOf(a.id), mode, doy) !== offsetOf(zoneOf(b.id), mode, doy))));
 
 $("#cities").innerHTML = CITIES.map(([name, lon, lat, left]) => {
   const [x, y] = path.projection()([lon, lat]);
@@ -280,11 +285,17 @@ worker.onmessage = ({ data: { lo, hi, setup: s } }) => {
   frame(); updateTip(); pump();
 };
 
+const day = d => new Date(2026, 0, d).toLocaleDateString("en-US", { month: "long", day: "numeric" });
+let lastDst;
 function update() {
   sunNow = sun(doy);
-  CITIES.forEach((c, i) => cityEls[i].classList.toggle("lit", elevation(c[1], c[2], offsetOf(c.zone, mode), minutes) < -2));
+  CITIES.forEach((c, i) => cityEls[i].classList.toggle("lit", elevation(c[1], c[2], offsetOf(c.zone, mode, doy), minutes) < -2));
   $("#clock").textContent = fmt(minutes);
-  $("#dateOut").textContent = new Date(2026, 0, doy).toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  $("#dateOut").textContent = day(doy);
+  const on = dstOn(mode, doy);
+  if (on !== lastDst) { lastDst = on; drawZoneLines(); } // Arizona's border only differs while the rest of Mountain time is on daylight time
+  $("#note").innerHTML = mode !== "now" ? "No clock changes, all year."
+    : on ? `<b>Daylight saving time.</b> Clocks fall back ${day(DST_END)}.` : `<b>Standard time.</b> Clocks spring forward ${day(DST_START)}.`;
   updateTip();
   request(false);
 }
@@ -294,7 +305,7 @@ function updateTip() {
   const { ids, W, H, dpr, view } = rendered, px = Math.floor(hover.x * dpr), py = Math.floor(hover.y * dpr);
   const i = (py * W + px) * 4, ll = view.invert([hover.x, hover.y]);
   if (px < 0 || py < 0 || px >= W || py >= H || !ll || !ids[i]) return tip.hidden = true;
-  const z = fixZone(Math.round(ids[i] / 30), ll[0]), off = offsetOf(z, mode);
+  const z = fixZone(Math.round(ids[i] / 30), ll[0]), off = offsetOf(z, mode, doy);
   // Anti-aliased county edges blend the encoded index, so confirm the hit and fall back to a search.
   let f = counties[ids[i + 1] * 256 + ids[i + 2] - 1];
   if (!f || !geoContains(f, ll)) f = counties.find(c => geoContains(c, ll));
@@ -341,7 +352,7 @@ $("#reset").onclick = () => stageSel.transition().duration(450).call(zoomer.tran
 const setMode = m => {
   mode = m;
   document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
-  drawZoneLines(); update();
+  lastDst = undefined; update();
 };
 document.querySelectorAll(".seg button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
 $("#time").oninput = e => { minutes = +e.target.value; stopPlay(); update(); };

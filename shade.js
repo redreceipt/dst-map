@@ -62,7 +62,7 @@ function setup({ counties, nation }, { cssW, cssH, dpr, M }) {
 
 function draw({ n, pix, zn, cov, P, Q, CL, SL, canvas, ctx, img, buf }, { minutes, doy, mode }) {
   const s = sun(doy), sd = Math.sin(s.dec), cd = Math.cos(s.dec), cA = new Float32Array(9), sA = new Float32Array(9);
-  for (let z = 1; z < 9; z++) { const a = hourAngle0(s, minutes, offsetOf(z, mode)); cA[z] = Math.cos(a) * cd; sA[z] = Math.sin(a) * cd; }
+  for (let z = 1; z < 9; z++) { const a = hourAngle0(s, minutes, offsetOf(z, mode, doy)); cA[z] = Math.cos(a) * cd; sA[z] = Math.sin(a) * cd; }
   // sin(elev) = sinφ·sinδ + cosφ·cosδ·cos(H0 + λ), with cos(H0 + λ) expanded so the per-pixel loop has no trig.
   for (let j = 0; j < n; j++) {
     const z = zn[j], e = P[j] * sd + Q[j] * (cA[z] * CL[j] - sA[z] * SL[j]);

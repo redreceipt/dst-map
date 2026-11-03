@@ -23,7 +23,13 @@ for (const [z, ids] of Object.entries(BY_COUNTY)) for (const id of ids.split(" "
 export const zoneOf = id => zoneById.get(id) ?? zoneById.get(id.slice(0, 2)) ?? 0;
 // Aleutians west of 169°30'W are on Hawaii–Aleutian time.
 export const fixZone = (z, lon) => z === 6 && (lon < -169.5 || lon > 0) ? 8 : z;
-export const offsetOf = (z, mode) => ZONES[z][1] + (mode === "dst" && ZONES[z][2] ? 1 : 0);
+// Today's rules: daylight time from the second Sunday in March to the first Sunday in November (2026 calendar, as day of year).
+const doyOf = (m, d) => (Date.UTC(2026, m, d) - Date.UTC(2026, 0, 1)) / 864e5 + 1;
+const sunday = (m, nth) => doyOf(m, 1 + (7 - new Date(Date.UTC(2026, m, 1)).getUTCDay()) % 7 + 7 * (nth - 1));
+export const DST_START = sunday(2, 2), DST_END = sunday(10, 1);
+// mode: "now" (switch twice a year), "std" (permanent standard) or "dst" (permanent daylight).
+export const dstOn = (mode, doy) => mode === "dst" || mode === "now" && doy >= DST_START && doy < DST_END;
+export const offsetOf = (z, mode, doy) => ZONES[z][1] + (ZONES[z][2] && dstOn(mode, doy) ? 1 : 0);
 
 // NOAA fractional-year approximation: declination (rad) and equation of time (min).
 export function sun(d) {
