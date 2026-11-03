@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Permanent DST vs. Standard Time: Interactive Sunlight Map</title>
+<meta name="description" content="Drag a 24-hour clock and see where it's light or dark across the U.S. under permanent Daylight Saving Time vs. permanent Standard Time, for any day of the year.">
+<link rel="canonical" href="https://dst-map.vercel.app/">
+<meta name="theme-color" content="#0b1126">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DST Map">
+<meta property="og:url" content="https://dst-map.vercel.app/">
+<meta property="og:title" content="Permanent DST vs. Standard Time: see who wakes up in the dark">
+<meta property="og:description" content="Same clock time, every time zone. Drag the clock to compare sunlight across the U.S. under each proposal.">
+<meta property="og:image" content="https://dst-map.vercel.app/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="U.S. map at 8:00 AM on December 21 under permanent DST: Michigan, Indiana and western parts of each time zone are still dark.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Permanent DST vs. Standard Time: see who wakes up in the dark">
+<meta name="twitter:description" content="Same clock time, every time zone. Drag the clock to compare sunlight across the U.S.">
+<meta name="twitter:image" content="https://dst-map.vercel.app/og.jpg">
+<meta name="twitter:image:alt" content="U.S. map at 8:00 AM on December 21 under permanent DST: Michigan, Indiana and western parts of each time zone are still dark.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Permanent DST vs. Standard Time: Interactive Sunlight Map","url":"https://dst-map.vercel.app/","applicationCategory":"EducationalApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Michael Neeley","url":"https://redreceipt.github.io/"}}</script>
+<style>
+  :root { --panel: rgba(17, 23, 46, .66); --line: rgba(255,255,255,.11); --text: #eef1fb; --muted: #97a2c4; --sun: #ffc65c; }
+  * { box-sizing: border-box; }
+  html { background: #05070f; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", system-ui, sans-serif;
+    color: var(--text); -webkit-font-smoothing: antialiased;
+    background: radial-gradient(1100px 680px at 50% 40%, #18244a 0%, #0b1126 55%, #05070f 100%) no-repeat;
+  }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px 28px; padding: 26px 32px 0; }
+  h1 { margin: 0; font-size: clamp(24px, 3.2vw, 38px); line-height: 1.08; letter-spacing: -.025em; font-weight: 760; }
+  h1 em { font-style: normal; background: linear-gradient(90deg, #ffd98a, #ff9f43); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header > div:first-child { flex: 1 1 320px; }
+  .sub { margin: 8px 0 0; color: var(--muted); max-width: 480px; }
+  .card { width: 340px; max-width: 100%; padding: 14px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+  .seg { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: rgba(0,0,0,.32); }
+  .seg button { flex: 1; white-space: nowrap; padding: 9px 12px; border: 0; border-radius: 9px; background: none; color: var(--muted);
+    font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: .2s; }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { color: #1e1304; background: linear-gradient(180deg, #ffd884, #f6a53a); box-shadow: 0 3px 14px rgba(246,165,58,.4); }
+  .row { display: flex; justify-content: space-between; margin: 14px 2px 2px; font-size: 13px; color: var(--muted); }
+  .row output { color: var(--text); font-weight: 650; }
+  .legend { display: flex; gap: 14px; margin: 12px 2px 0; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+  main { display: flex; align-items: center; justify-content: center; margin: 6px 20px; min-height: 0; }
+  #stage { position: relative; aspect-ratio: 975 / 610; width: min(100%, 1240px); touch-action: pan-y; }
+  #stage > svg, #stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #top { pointer-events: none; overflow: visible; }
+  .states { fill: none; stroke: rgba(255,255,255,.6); stroke-width: .6; stroke-linejoin: round; }
+  .zones { fill: none; stroke: var(--sun); stroke-width: 1.3; stroke-dasharray: 4 3; stroke-linejoin: round; opacity: .85; }
+  .city text { font-size: 11px; font-weight: 650; fill: #fff; paint-order: stroke; stroke: rgba(6,9,22,.8); stroke-width: 3px; stroke-linejoin: round; }
+  .city .glow { opacity: 0; transition: opacity .25s; }
+  .city .dot { fill: #fff; stroke: rgba(6,9,22,.75); stroke-width: 1; transition: fill .25s; }
+  .city.lit .glow { opacity: 1; }
+  .city.lit .dot { fill: #ffe4a0; }
+  #tip { position: absolute; z-index: 2; pointer-events: none; min-width: 200px; padding: 10px 12px; border-radius: 12px; font-size: 13px;
+    background: rgba(10,14,32,.9); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.45); transform: translate(14px, -50%); }
+  #tip b { display: block; font-size: 14px; }
+  #tip .m { color: var(--muted); }
+  #tip .s { margin-top: 6px; font-weight: 650; }
+  footer { padding: 0 32px 18px; }
+  .dock { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: auto 170px 1fr; align-items: center; gap: 18px;
+    padding: 14px 20px; border-radius: 22px; background: var(--panel); border: 1px solid var(--line);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+  #play { width: 48px; height: 48px; border: 0; border-radius: 50%; cursor: pointer; color: #1e1304; font-size: 17px;
+    background: linear-gradient(180deg, #ffd884, #f6a53a); box-shadow: 0 4px 18px rgba(246,165,58,.45); }
+  #clock { font-size: 34px; font-weight: 760; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .cap { margin-top: 5px; font-size: 12px; color: var(--muted); }
+  .ticks { display: flex; justify-content: space-between; padding: 0 13px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ticks span { width: 0; display: flex; justify-content: center; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; margin: 0; background: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.14); }
+  input[type=range]::-moz-range-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.14); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -9px; border: 0; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff7dc, #ffc65c 58%, #f0922a); box-shadow: 0 0 0 5px rgba(255,198,92,.18), 0 0 22px rgba(255,198,92,.7); }
+  input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border: 0; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff7dc, #ffc65c 58%, #f0922a); box-shadow: 0 0 0 5px rgba(255,198,92,.18), 0 0 22px rgba(255,198,92,.7); }
+  #date::-webkit-slider-runnable-track { height: 6px; }
+  #date::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -6px; }
+  #date::-moz-range-thumb { width: 18px; height: 18px; }
+  input[type=range]:focus-visible { outline: 2px solid var(--sun); outline-offset: 4px; border-radius: 8px; }
+  .credit { margin: 10px 0 0; text-align: center; font-size: 11px; color: #67719a; }
+  @media (min-width: 721px) and (min-height: 640px) {
+    body { height: 100svh; }
+    main { container-type: size; }
+    #stage { width: min(100cqw, 159.8cqh, 1240px); }
+  }
+  @media (max-width: 720px) {
+    main { margin: 12px 8px; }
+    header { padding: 18px 16px 0; } footer { padding: 0 12px 14px; }
+    .card { width: 100%; }
+    .seg button { font-size: 13px; padding: 8px 6px; }
+    .dock { grid-template-columns: auto 1fr; gap: 10px 14px; padding: 12px 14px; }
+    .dock .slider { grid-column: 1 / -1; }
+    .city text { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Permanent <em>Daylight Saving</em><br>vs. Standard Time</h1>
+    <p class="sub">Drag the clock. It's the same local time in every time zone, so you can see who's in daylight and who's in the dark.</p>
+  </div>
+  <div class="card">
+    <div class="seg" role="group" aria-label="Clock policy">
+      <button data-mode="std">Permanent Standard</button>
+      <button data-mode="dst">Permanent DST</button>
+    </div>
+    <label class="row" for="date"><span>Date</span><output id="dateOut"></output></label>
+    <input id="date" type="range" min="1" max="365" value="355">
+    <div class="legend">
+      <span><i style="background:#e6ebd5"></i>Daylight</span>
+      <span><i style="background:linear-gradient(135deg,#f0a878,#6c4f92)"></i>Twilight</span>
+      <span><i style="background:#1a1f45"></i>Night</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="base" viewBox="0 0 975 610" aria-label="Map of the United States">
+      <defs>
+        <linearGradient id="land" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef1de"/><stop offset="1" stop-color="#d9e0c4"/></linearGradient>
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".55"/></filter>
+      </defs>
+      <path id="nation" fill="url(#land)" filter="url(#shadow)"/>
+    </svg>
+    <canvas id="shade"></canvas>
+    <svg id="top" viewBox="0 0 975 610">
+      <defs>
+        <radialGradient id="glow"><stop offset="0" stop-color="#ffe7a8" stop-opacity=".95"/><stop offset=".35" stop-color="#ffc65c" stop-opacity=".45"/><stop offset="1" stop-color="#ffc65c" stop-opacity="0"/></radialGradient>
+      </defs>
+      <path class="states"/><path class="zones"/><g id="cities"></g>
+    </svg>
+    <div id="tip" hidden></div>
+  </div>
+</main>
+
+<footer>
+  <div class="dock">
+    <button id="play" aria-label="Play">▶</button>
+    <div><div id="clock"></div><div class="cap">local time, every zone</div></div>
+    <div class="slider">
+      <input id="time" type="range" min="0" max="1435" step="5" value="480" aria-label="Local clock time">
+      <div class="ticks"><span>12a</span><span>3a</span><span>6a</span><span>9a</span><span>12p</span><span>3p</span><span>6p</span><span>9p</span><span>12a</span></div>
+    </div>
+  </div>
+  <p class="credit">Sun position: NOAA solar equations · Map: U.S. Census via us-atlas · Dashed lines: time zone borders · Arizona &amp; Hawaii stay on standard time either way</p>
+</footer>
+
+<script type="module">
+import { geoAlbersUsa, geoContains, geoPath } from "https://cdn.jsdelivr.net/npm/d3-geo@3/+esm";
+import { feature, mesh } from "https://cdn.jsdelivr.net/npm/topojson-client@3/+esm";
+
+const VW = 975, VH = 610, RAD = Math.PI / 180, RISE = -0.833;
+const $ = s => document.querySelector(s);
+const projection = geoAlbersUsa().scale(1300).translate([VW / 2, VH / 2]);
+const path = geoPath(projection);
+
+// [name, standard UTC offset, follows the DST toggle]
+const ZONES = [["", 0, 0], ["Eastern", -5, 1], ["Central", -6, 1], ["Mountain", -7, 1], ["Mountain (Arizona)", -7, 0],
+  ["Pacific", -8, 1], ["Alaska", -9, 1], ["Hawaii", -10, 0], ["Hawaii–Aleutian", -10, 1]];
+const BY_STATE = {
+  1: "09 10 11 12 13 18 21 23 24 25 26 33 34 36 37 39 42 44 45 50 51 54",
+  2: "01 05 17 19 20 22 27 28 29 31 38 40 46 47 48 55", 3: "08 16 30 35 49 56", 4: "04", 5: "06 32 41 53", 6: "02", 7: "15" };
+// Counties whose zone differs from their state's (county-level approximation of the official boundaries).
+const BY_COUNTY = {
+  1: "47001 47009 47011 47013 47019 47025 47029 47057 47059 47063 47065 47067 47073 47089 47091 47093 47105 47107 47121 47123 47129 47139 47143 47145 47151 47155 47163 47171 47173 47179",
+  2: "12005 12013 12033 12045 12059 12063 12091 12113 12131 12133 18051 18073 18089 18091 18111 18123 18127 18129 18147 18149 18163 18173 26043 26053 26071 26109 " +
+     "21001 21003 21007 21009 21027 21031 21033 21035 21039 21047 21053 21055 21057 21059 21061 21075 21083 21085 21087 21091 21099 21101 21105 21107 21139 21141 21143 21145 21149 21157 21169 21171 21177 21183 21207 21213 21219 21221 21225 21227 21233",
+  3: "38001 38007 38011 38033 38037 38041 38085 38087 38089 46007 46019 46031 46033 46041 46047 46055 46063 46071 46081 46093 46102 46103 46105 46113 46117 46137 " +
+     "31005 31007 31013 31029 31033 31045 31049 31057 31069 31075 31091 31101 31105 31123 31135 31157 31161 31165 20071 20075 20181 20199 48141 48229 41045",
+  5: "16009 16017 16021 16035 16049 16055 16057 16061 16069 16079" };
+const zoneById = new Map();
+for (const [z, ids] of Object.entries(BY_STATE)) for (const id of ids.split(" ")) zoneById.set(id, +z);
+for (const [z, ids] of Object.entries(BY_COUNTY)) for (const id of ids.split(" ")) zoneById.set(id, +z);
+const zoneOf = id => zoneById.get(id) ?? zoneById.get(id.slice(0, 2)) ?? 0;
+// Aleutians west of 169°30'W are on Hawaii–Aleutian time.
+const fixZone = (z, lon) => z === 6 && (lon < -169.5 || lon > 0) ? 8 : z;
+
+const CITIES = [["Seattle", -122.33, 47.61], ["San Francisco", -122.42, 37.77], ["Los Angeles", -118.24, 34.05, 1], ["Phoenix", -112.07, 33.45],
+  ["Denver", -104.99, 39.74], ["Dallas", -96.8, 32.78], ["Houston", -95.37, 29.76], ["Minneapolis", -93.27, 44.98], ["Chicago", -87.63, 41.88, 1],
+  ["Detroit", -83.05, 42.33], ["Atlanta", -84.39, 33.75], ["Miami", -80.19, 25.76], ["Washington", -77.04, 38.9, 1], ["New York", -74.0, 40.71],
+  ["Boston", -71.06, 42.36], ["Anchorage", -149.9, 61.22], ["Honolulu", -157.86, 21.31]];
+
+let mode = "dst", minutes = 480, doy = 355, sunNow, W, H, dpr, ids, n, pix, zn, cov, P, Q, CL, SL, img, buf, hover, playing = false;
+const shade = $("#shade"), ctx = shade.getContext("2d"), stage = $("#stage"), tip = $("#tip");
+const offsetOf = z => ZONES[z][1] + (mode === "dst" && ZONES[z][2] ? 1 : 0);
+
+// NOAA fractional-year approximation: declination (rad) and equation of time (min).
+function sun(d) {
+  const g = 2 * Math.PI / 365 * (d - 1);
+  return {
+    dec: 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g),
+    eqt: 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g)) };
+}
+// Hour angle (rad) at longitude 0 for local clock `m` in a zone at UTC offset `off`; add lon for the place.
+const hourAngle0 = (m, off) => ((m - off * 60 + sunNow.eqt) / 4 - 180) * RAD;
+const elevation = (lon, lat, off, m) => Math.asin(Math.sin(lat * RAD) * Math.sin(sunNow.dec) +
+  Math.cos(lat * RAD) * Math.cos(sunNow.dec) * Math.cos(hourAngle0(m, off) + lon * RAD)) / RAD;
+function riseSet(lon, lat, off) {
+  const c = (Math.sin(RISE * RAD) - Math.sin(lat * RAD) * Math.sin(sunNow.dec)) / (Math.cos(lat * RAD) * Math.cos(sunNow.dec));
+  if (c > 1) return "Polar night: no sunrise";
+  if (c < -1) return "Midnight sun: no sunset";
+  const noon = 720 - 4 * lon - sunNow.eqt + off * 60, h = 4 * Math.acos(c) / RAD;
+  return `Sunrise ${fmt(noon - h)} · Sunset ${fmt(noon + h)}`;
+}
+function fmt(m) {
+  m = ((Math.round(m) % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  return `${(h + 11) % 12 + 1}:${String(m % 60).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+// Overlay color by sun elevation (deg): clear by day, warm at the horizon, deep blue at night.
+const KEYS = [[10, 255, 196, 120, 0], [4, 255, 178, 96, .1], [0, 252, 128, 84, .28], [-3, 168, 76, 112, .46],
+  [-6, 52, 44, 112, .62], [-12, 16, 20, 56, .8], [-18, 8, 11, 32, .87]];
+const LUT = new Uint32Array(2048);
+for (let b = 0; b < 2048; b++) {
+  const e = Math.asin(Math.min(1, b / 1023.5 - 1)) / RAD;
+  const j = KEYS.findIndex(k => k[0] <= e), hi = KEYS.at(j), lo = j <= 0 ? hi : KEYS[j - 1];
+  const t = lo === hi ? 0 : (lo[0] - e) / (lo[0] - hi[0]);
+  const c = [1, 2, 3, 4].map(i => lo[i] + (hi[i] - lo[i]) * t);
+  LUT[b] = ((Math.round(c[3] * 255) << 24) | (Math.round(c[2]) << 16) | (Math.round(c[1]) << 8) | Math.round(c[0])) >>> 0;
+}
+
+const us = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json").then(r => r.json());
+const counties = feature(us, us.objects.counties).features;
+const nation = feature(us, us.objects.nation);
+const stateName = new Map(feature(us, us.objects.states).features.map(f => [f.id, f.properties.name]));
+$("#nation").setAttribute("d", path(nation));
+$(".states").setAttribute("d", path(mesh(us, us.objects.states, (a, b) => a !== b)));
+const drawZoneLines = () => $(".zones").setAttribute("d", path(mesh(us, us.objects.counties,
+  (a, b) => a !== b && offsetOf(zoneOf(a.id)) !== offsetOf(zoneOf(b.id)))));
+
+$("#cities").innerHTML = CITIES.map(([name, lon, lat, left]) => {
+  const [x, y] = projection([lon, lat]);
+  return `<g class="city" transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><circle class="glow" r="11" fill="url(#glow)"/><circle class="dot" r="2.6"/>` +
+    `<text x="${left ? -6 : 6}" y="4" text-anchor="${left ? "end" : "start"}">${name}</text></g>`;
+}).join("");
+const cityEls = [...document.querySelectorAll(".city")];
+
+// Rasterize zones (R) and county index (G,B) plus land coverage at device resolution, then invert every land pixel to lon/lat once.
+function setup() {
+  const r = stage.getBoundingClientRect();
+  dpr = Math.min(devicePixelRatio || 1, 2);
+  W = shade.width = Math.round(r.width * dpr); H = shade.height = Math.round(r.height * dpr);
+  const k = W / VW, c = new OffscreenCanvas(W, H), x = c.getContext("2d", { willReadFrequently: true }), p = geoPath(projection, x);
+  x.setTransform(k, 0, 0, k, 0, 0); x.lineWidth = 1.5 / k;
+  counties.forEach((f, i) => {
+    x.fillStyle = x.strokeStyle = `rgb(${zoneOf(f.id) * 30},${(i + 1) >> 8},${(i + 1) & 255})`;
+    x.beginPath(); p(f); x.fill(); x.stroke();
+  });
+  ids = x.getImageData(0, 0, W, H).data;
+  x.clearRect(0, 0, VW, VH); x.fillStyle = "#000"; x.beginPath(); p(nation); x.fill();
+  const alpha = x.getImageData(0, 0, W, H).data;
+  let count = 0;
+  for (let i = 0; i < W * H; i++) if (alpha[i * 4 + 3] && ids[i * 4]) count++;
+  pix = new Int32Array(count); zn = new Uint8Array(count); cov = new Uint8Array(count);
+  P = new Float32Array(count); Q = new Float32Array(count); CL = new Float32Array(count); SL = new Float32Array(count);
+  n = 0;
+  for (let y = 0; y < H; y++) for (let x0 = 0; x0 < W; x0++) {
+    const i = y * W + x0, a = alpha[i * 4 + 3], z = Math.round(ids[i * 4] / 30);
+    if (!a || !z) continue;
+    const ll = projection.invert([(x0 + .5) / k, (y + .5) / k]);
+    if (!ll) continue;
+    const [lon, lat] = ll;
+    pix[n] = i; zn[n] = fixZone(z, lon); cov[n] = a;
+    P[n] = Math.sin(lat * RAD); Q[n] = Math.cos(lat * RAD); CL[n] = Math.cos(lon * RAD); SL[n] = Math.sin(lon * RAD);
+    n++;
+  }
+  img = ctx.createImageData(W, H); buf = new Uint32Array(img.data.buffer);
+  CITIES.forEach(c => {
+    const [px, py] = projection([c[1], c[2]]);
+    c.zone = fixZone(Math.round(ids[(Math.round(py * k) * W + Math.round(px * k)) * 4] / 30), c[1]);
+  });
+  draw();
+}
+
+function draw() {
+  if (!img) return;
+  sunNow = sun(doy);
+  const sd = Math.sin(sunNow.dec), cd = Math.cos(sunNow.dec), cA = new Float32Array(9), sA = new Float32Array(9);
+  for (let z = 1; z < 9; z++) { const a = hourAngle0(minutes, offsetOf(z)); cA[z] = Math.cos(a) * cd; sA[z] = Math.sin(a) * cd; }
+  // sin(elev) = sinφ·sinδ + cosφ·cosδ·cos(H0 + λ), with cos(H0 + λ) expanded so the per-pixel loop has no trig.
+  for (let j = 0; j < n; j++) {
+    const z = zn[j], s = P[j] * sd + Q[j] * (cA[z] * CL[j] - sA[z] * SL[j]);
+    let c = LUT[((s + 1) * 1023.5) | 0];
+    if (cov[j] !== 255) c = ((((c >>> 24) * cov[j] / 255) << 24) | (c & 0xffffff)) >>> 0;
+    buf[pix[j]] = c;
+  }
+  ctx.putImageData(img, 0, 0);
+  CITIES.forEach((c, i) => cityEls[i].classList.toggle("lit", elevation(c[1], c[2], offsetOf(c.zone), minutes) < -2));
+  $("#clock").textContent = fmt(minutes);
+  $("#dateOut").textContent = new Date(2026, 0, doy).toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  updateTip();
+}
+let queued = false;
+const redraw = () => queued || (queued = true, requestAnimationFrame(() => { queued = false; draw(); }));
+
+function updateTip() {
+  if (!hover || !ids) return tip.hidden = true;
+  const r = stage.getBoundingClientRect(), i = (Math.floor(hover.y * dpr) * W + Math.floor(hover.x * dpr)) * 4;
+  const ll = projection.invert([hover.x * VW / r.width, hover.y * VW / r.width]), raw = ids[i];
+  if (!ll || !raw || hover.x < 0 || hover.y < 0 || hover.x >= r.width || hover.y >= r.height) return tip.hidden = true;
+  const z = fixZone(Math.round(raw / 30), ll[0]), off = offsetOf(z);
+  // Anti-aliased county edges blend the encoded index, so confirm the hit and fall back to a search.
+  let f = counties[ids[i + 1] * 256 + ids[i + 2] - 1];
+  if (!f || !geoContains(f, ll)) f = counties.find(c => geoContains(c, ll));
+  if (!f) return tip.hidden = true;
+  const e = elevation(ll[0], ll[1], off, minutes);
+  const state = e > RISE ? "☀️ Sun is up" : e > -6 ? "🌅 Twilight" : "🌙 Dark";
+  tip.innerHTML = `<b>${f.properties.name}, ${stateName.get(f.id.slice(0, 2))}</b>` +
+    `<div class="m">${ZONES[z][0]} · UTC${off < 0 ? "−" : "+"}${Math.abs(off)}</div><div>${riseSet(ll[0], ll[1], off)}</div>` +
+    `<div class="s">${state} at ${fmt(minutes)}</div>`;
+  tip.hidden = false;
+  tip.style.left = `${Math.max(0, Math.min(hover.x, r.width - tip.offsetWidth - 14))}px`; tip.style.top = `${hover.y}px`;
+}
+const onPointer = e => { const r = stage.getBoundingClientRect(); hover = { x: e.clientX - r.left, y: e.clientY - r.top }; updateTip(); };
+stage.addEventListener("pointermove", onPointer);
+stage.addEventListener("pointerdown", onPointer);
+stage.addEventListener("pointerleave", e => { if (e.pointerType !== "touch") { hover = null; updateTip(); } });
+
+const setMode = m => {
+  mode = m;
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  drawZoneLines(); redraw();
+};
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+$("#time").oninput = e => { minutes = +e.target.value; stopPlay(); redraw(); };
+$("#date").oninput = e => { doy = +e.target.value; redraw(); };
+
+let last;
+const stopPlay = () => { playing = false; $("#play").textContent = "▶"; $("#play").ariaLabel = "Play"; };
+function tick(t) {
+  if (!playing) return;
+  if (last) { minutes = (minutes + (t - last) * 0.09) % 1440; $("#time").value = minutes; draw(); } // 1.5 clock hours per second
+  last = t; requestAnimationFrame(tick);
+}
+$("#play").onclick = () => {
+  if (playing) return stopPlay();
+  playing = true; last = null; $("#play").textContent = "❚❚"; $("#play").ariaLabel = "Pause"; requestAnimationFrame(tick);
+};
+
+setMode(mode);
+let resizeTimer;
+new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(setup, 150); }).observe(stage);
+</script>
+</body>
+</html>
