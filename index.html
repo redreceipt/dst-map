@@ -191,8 +191,8 @@ const CITIES = [["Seattle", -122.33, 47.61], ["San Francisco", -122.42, 37.77], 
 
 let mode = "dst", minutes = 480, doy = 355, sunNow = sun(doy), hover, playing = false, gesturing = false;
 // Map transforms are {k, x, y}: screen = k·p + (x, y) for a point p in unzoomed (975×610) units.
-let fit, current = zoomIdentity, shown, rendered;
-const stage = $("#stage"), map = $("#map"), tip = $("#tip"), shade = $("#shade"), bitmaps = shade.getContext("bitmaprenderer");
+let fit, current = zoomIdentity, rendered;
+const stage = $("#stage"), tip = $("#tip"), shade = $("#shade");
 const screenOf = t => ({ k: t.k * fit.k, x: t.k * fit.x + t.x, y: t.k * fit.y + t.y });
 
 const elevation = (lon, lat, off, m) => Math.asin(Math.sin(lat * RAD) * Math.sin(sunNow.dec) +
@@ -235,22 +235,32 @@ function fitMap() {
   fit = { k, x: (l + r) / 2 - k * (x0 + x1) / 2, y: (t + b) / 2 - k * (y0 + y1) / 2 };
 }
 
-// Show `m` in the SVG layers (the canvas bitmap is painted for it), then CSS-transform both to the live zoom.
-function show(m) {
-  shown = m;
-  document.querySelectorAll(".zoom").forEach(g => g.setAttribute("transform", `translate(${m.x},${m.y}) scale(${m.k})`));
-  cityEls.forEach(g => g.setAttribute("transform", `translate(${g.dataset.x},${g.dataset.y}) scale(${1 / m.k})`));
-  stage.classList.toggle("zoomed", m.k > fit.k * 1.01);
-  stage.classList.toggle("labels", m.k >= .7); // city names only once the map is drawn large enough to fit them
-  sync();
-}
-function sync() {
-  const c = screenOf(current), k = c.k / shown.k, x = c.x - shown.x * k, y = c.y - shown.y * k;
-  const same = Math.abs(k - 1) < 1e-6 && Math.abs(x) < .01 && Math.abs(y) < .01;
-  map.style.transform = same ? "" : `translate(${x}px,${y}px) scale(${k})`;
+// Each frame the SVG layers follow the live zoom, and the canvas composites two overlays from the worker:
+// `lo` covers the whole country (so panning never reveals unshaded land) and `hi` is sharp for the view it was rendered for.
+let loBmp, hiBmp, painting = false;
+const ctx = shade.getContext("2d");
+const frame = () => painting || (painting = true, requestAnimationFrame(paint));
+function paint() {
+  painting = false;
+  const c = screenOf(current), d = Math.min(devicePixelRatio || 1, 2), w = innerWidth, h = innerHeight;
+  if (shade.width !== Math.round(w * d) || shade.height !== Math.round(h * d)) { shade.width = Math.round(w * d); shade.height = Math.round(h * d); }
+  document.querySelectorAll(".zoom").forEach(g => g.setAttribute("transform", `translate(${c.x},${c.y}) scale(${c.k})`));
+  cityEls.forEach(g => g.setAttribute("transform", `translate(${g.dataset.x},${g.dataset.y}) scale(${1 / c.k})`));
+  stage.classList.toggle("zoomed", current.k > 1.01);
+  stage.classList.toggle("labels", c.k >= .7); // city names only once the map is drawn large enough to fit them
   $("#reset").hidden = current.k < 1.001;
-  return same;
+  ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, w, h);
+  if (loBmp) ctx.drawImage(loBmp, c.x, c.y, 975 * c.k, 610 * c.k);
+  if (hiBmp && rendered) {
+    const M = rendered.M, k = c.k / M.k, x = c.x - M.x * k, y = c.y - M.y * k, rw = rendered.cssW * k, rh = rendered.cssH * k;
+    ctx.clearRect(x, y, rw, rh); ctx.drawImage(hiBmp, x, y, rw, rh);
+  }
 }
+// True when the sharp overlay was rendered for exactly the current view.
+const settled = () => {
+  const c = screenOf(current), M = rendered?.M;
+  return !!M && Math.abs(c.k / M.k - 1) < 1e-6 && Math.abs(c.x - M.x) < .01 && Math.abs(c.y - M.y) < .01;
+};
 
 // One worker request in flight; newer state coalesces into the next one.
 let busy = false, needSetup = false, needDraw = false;
@@ -262,17 +272,12 @@ function pump() {
   busy = true; needSetup = needDraw = false;
   worker.postMessage(msg);
 }
-worker.onmessage = ({ data: { bitmap, setup: s } }) => {
+worker.onmessage = ({ data: { lo, hi, setup: s } }) => {
   busy = false;
-  if (s) {
-    shade.width = s.W; shade.height = s.H;
-    rendered = { ...s, view: geoAlbersUsa().scale(BASE * s.M.k).translate([CENTER[0] * s.M.k + s.M.x, CENTER[1] * s.M.k + s.M.y]) };
-    bitmaps.transferFromImageBitmap(bitmap);
-    show(s.M);
-    if (!gesturing) map.style.willChange = "";
-    updateTip();
-  } else bitmaps.transferFromImageBitmap(bitmap);
-  pump();
+  loBmp?.close(); loBmp = lo;
+  if (hi) { hiBmp?.close(); hiBmp = hi; }
+  if (s) rendered = { ...s, view: geoAlbersUsa().scale(BASE * s.M.k).translate([CENTER[0] * s.M.k + s.M.x, CENTER[1] * s.M.k + s.M.y]) };
+  frame(); updateTip(); pump();
 };
 
 function update() {
@@ -285,7 +290,7 @@ function update() {
 }
 
 function updateTip() {
-  if (!hover || !rendered || gesturing || map.style.transform) return tip.hidden = true;
+  if (!hover || gesturing || !settled()) return tip.hidden = true;
   const { ids, W, H, dpr, view } = rendered, px = Math.floor(hover.x * dpr), py = Math.floor(hover.y * dpr);
   const i = (py * W + px) * 4, ll = view.invert([hover.x, hover.y]);
   if (px < 0 || py < 0 || px >= W || py >= H || !ll || !ids[i]) return tip.hidden = true;
@@ -312,16 +317,16 @@ stage.addEventListener("pointermove", onPointer);
 stage.addEventListener("pointerdown", onPointer);
 stage.addEventListener("pointerleave", e => { if (e.pointerType !== "touch") { hover = null; updateTip(); } });
 
-// Zoom: during a gesture only the CSS transform changes; when it settles the worker repaints sharp for the new view.
+// Zoom: frames follow the gesture live; when it settles the worker repaints the sharp overlay for the new view.
 let settleTimer, safariPinch = false;
 const stageSel = select(stage);
 const zoomer = zoom().scaleExtent([1, 16])
   .filter(e => !(safariPinch && e.type === "wheel") && (!e.ctrlKey || e.type === "wheel") && !e.button)
-  .on("start", () => { gesturing = true; map.style.willChange = "transform"; clearTimeout(settleTimer); updateTip(); })
-  .on("zoom", e => { current = e.transform; sync(); })
+  .on("start", () => { gesturing = true; clearTimeout(settleTimer); updateTip(); })
+  .on("zoom", e => { current = e.transform; frame(); })
   .on("end", () => {
     gesturing = false;
-    settleTimer = setTimeout(() => sync() ? (map.style.willChange = "", updateTip()) : request(true), 150);
+    settleTimer = setTimeout(() => settled() ? updateTip() : request(true), 150);
   });
 stageSel.call(zoomer);
 // Safari sends trackpad pinches as gesture events rather than ctrl+wheel; touch devices go through d3's touch handling.
@@ -357,7 +362,7 @@ $("#play").onclick = () => {
 function layout() {
   fitMap();
   zoomer.translateExtent([[0, 0], [innerWidth, innerHeight]]);
-  if (shown) sync(); else show(screenOf(current));
+  frame();
   request(true);
 }
 let resizeTimer;

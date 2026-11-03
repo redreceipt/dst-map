@@ -8,11 +8,10 @@ const ready = fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json")
   counties.forEach(f => f.box = base.bounds(f));
   return { counties, nation: feature(us, us.objects.nation) };
 });
-let W, H, n = 0, pix, zn, cov, P, Q, CL, SL, canvas, ctx, img, buf;
-
-// Zones (R) and county index (G,B) plus land coverage at device resolution; every land pixel gets lon/lat once per view.
+// A layer is the overlay for one view: `M` maps unzoomed units to CSS px, `dpr` CSS px to canvas px.
+// Zones (R) and county index (G,B) plus land coverage are rasterized, and every land pixel gets lon/lat once per view.
 function setup({ counties, nation }, { cssW, cssH, dpr, M }) {
-  W = Math.round(cssW * dpr); H = Math.round(cssH * dpr);
+  const W = Math.round(cssW * dpr), H = Math.round(cssH * dpr);
   const view = geoAlbersUsa().scale(BASE * M.k).translate([CENTER[0] * M.k + M.x, CENTER[1] * M.k + M.y]);
   const c = new OffscreenCanvas(W, H), x = c.getContext("2d", { willReadFrequently: true }), p = geoPath(view, x);
   x.setTransform(dpr, 0, 0, dpr, 0, 0); x.lineWidth = 1.5 / dpr;
@@ -29,15 +28,15 @@ function setup({ counties, nation }, { cssW, cssH, dpr, M }) {
   const alpha = x.getImageData(0, 0, W, H).data;
   let count = 0;
   for (let i = 0; i < W * H; i++) if (alpha[i * 4 + 3] && ids[i * 4]) count++;
-  pix = new Int32Array(count); zn = new Uint8Array(count); cov = new Uint8Array(count);
-  P = new Float32Array(count); Q = new Float32Array(count); CL = new Float32Array(count); SL = new Float32Array(count);
+  const L = { W, H, ids, n: 0, pix: new Int32Array(count), zn: new Uint8Array(count), cov: new Uint8Array(count),
+    P: new Float32Array(count), Q: new Float32Array(count), CL: new Float32Array(count), SL: new Float32Array(count) };
   // Invert on a coarse grid and interpolate; fall back to an exact invert where corners disagree (insets, antimeridian, off-map).
   const G = 4, GW = Math.floor(W / G) + 2, GH = Math.floor(H / G) + 2, grid = new Float64Array(GW * GH * 2).fill(NaN);
   for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
     const ll = view.invert([gx * G / dpr, gy * G / dpr]);
     if (ll) grid.set(ll, (gy * GW + gx) * 2);
   }
-  n = 0;
+  let n = 0;
   for (let y = 0; y < H; y++) for (let x0 = 0; x0 < W; x0++) {
     const i = y * W + x0, a = alpha[i * 4 + 3], z = Math.round(ids[i * 4] / 30);
     if (!a || !z) continue;
@@ -52,16 +51,16 @@ function setup({ counties, nation }, { cssW, cssH, dpr, M }) {
       if (!ll) continue;
       [lon, lat] = ll;
     }
-    pix[n] = i; zn[n] = fixZone(z, lon); cov[n] = a;
-    P[n] = Math.sin(lat * RAD); Q[n] = Math.cos(lat * RAD); CL[n] = Math.cos(lon * RAD); SL[n] = Math.sin(lon * RAD);
+    L.pix[n] = i; L.zn[n] = fixZone(z, lon); L.cov[n] = a;
+    L.P[n] = Math.sin(lat * RAD); L.Q[n] = Math.cos(lat * RAD); L.CL[n] = Math.cos(lon * RAD); L.SL[n] = Math.sin(lon * RAD);
     n++;
   }
-  canvas = new OffscreenCanvas(W, H); ctx = canvas.getContext("2d");
-  img = ctx.createImageData(W, H); buf = new Uint32Array(img.data.buffer);
-  return ids;
+  L.n = n; L.canvas = new OffscreenCanvas(W, H); L.ctx = L.canvas.getContext("2d");
+  L.img = L.ctx.createImageData(W, H); L.buf = new Uint32Array(L.img.data.buffer);
+  return L;
 }
 
-function draw({ minutes, doy, mode }) {
+function draw({ n, pix, zn, cov, P, Q, CL, SL, canvas, ctx, img, buf }, { minutes, doy, mode }) {
   const s = sun(doy), sd = Math.sin(s.dec), cd = Math.cos(s.dec), cA = new Float32Array(9), sA = new Float32Array(9);
   for (let z = 1; z < 9; z++) { const a = hourAngle0(s, minutes, offsetOf(z, mode)); cA[z] = Math.cos(a) * cd; sA[z] = Math.sin(a) * cd; }
   // sin(elev) = sinφ·sinδ + cosφ·cosδ·cos(H0 + λ), with cos(H0 + λ) expanded so the per-pixel loop has no trig.
@@ -75,8 +74,15 @@ function draw({ minutes, doy, mode }) {
   return canvas.transferToImageBitmap();
 }
 
+// `lo` covers the whole country at modest resolution, so panning never reveals unshaded land; `hi` is sharp for the current view.
+const LO = 2;
+let lo, hi;
 onmessage = async ({ data }) => {
   const geo = await ready;
-  const ids = data.setup && setup(geo, data.setup), bitmap = draw(data.state);
-  postMessage({ bitmap, setup: ids && { ...data.setup, ids, W, H } }, ids ? [bitmap, ids.buffer] : [bitmap]);
+  lo ??= setup(geo, { cssW: 975, cssH: 610, dpr: LO, M: { k: 1, x: 0, y: 0 } });
+  if (data.setup) hi = setup(geo, data.setup);
+  const loBitmap = draw(lo, data.state), hiBitmap = hi && draw(hi, data.state);
+  const ids = data.setup && hi.ids;
+  postMessage({ lo: loBitmap, hi: hiBitmap, setup: ids && { ...data.setup, ids, W: hi.W, H: hi.H } },
+    [loBitmap, ...(hiBitmap ? [hiBitmap] : []), ...(ids ? [ids.buffer] : [])]);
 };
