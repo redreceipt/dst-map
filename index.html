@@ -54,9 +54,15 @@
   .legend { display: flex; gap: 14px; margin: 12px 2px 0; font-size: 12px; color: var(--muted); }
   .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
   main { display: flex; align-items: center; justify-content: center; margin: 6px 20px; min-height: 0; }
-  #stage { position: relative; aspect-ratio: 975 / 610; width: min(100%, 1240px); touch-action: pan-y; }
-  #stage > svg, #stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-  #top { pointer-events: none; overflow: visible; }
+  #stage { position: relative; aspect-ratio: 975 / 610; width: min(100%, 1240px, 75svh * 1.598); }
+  #stage { overflow: hidden; border-radius: 18px; cursor: grab; }
+  #stage:active { cursor: grabbing; }
+  #map { position: absolute; inset: 0; transform-origin: 0 0; }
+  #map > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #top { pointer-events: none; }
+  .states, .zones { vector-effect: non-scaling-stroke; }
+  #reset { position: absolute; right: 10px; bottom: 10px; z-index: 2; padding: 8px 12px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 650;
+    color: var(--text); background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   .states { fill: none; stroke: rgba(255,255,255,.6); stroke-width: .6; stroke-linejoin: round; }
   .zones { fill: none; stroke: var(--sun); stroke-width: 1.3; stroke-dasharray: 4 3; stroke-linejoin: round; opacity: .85; }
   .city text { font-size: 11px; font-weight: 650; fill: #fff; paint-order: stroke; stroke: rgba(6,9,22,.8); stroke-width: 3px; stroke-linejoin: round; }
@@ -111,7 +117,7 @@
 <header>
   <div>
     <h1>Permanent <em>Daylight Saving</em><br>vs. Standard Time</h1>
-    <p class="sub">Drag the clock. It's the same local time in every time zone, so you can see who's in daylight and who's in the dark.</p>
+    <p class="sub">Drag the clock. It's the same local time in every time zone, so you can see who's in daylight and who's in the dark. Pinch or scroll to zoom.</p>
   </div>
   <div class="card">
     <div class="seg" role="group" aria-label="Clock policy">
@@ -130,20 +136,23 @@
 
 <main>
   <div id="stage">
+    <div id="map">
     <svg id="base" viewBox="0 0 975 610" aria-label="Map of the United States">
       <defs>
         <linearGradient id="land" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef1de"/><stop offset="1" stop-color="#d9e0c4"/></linearGradient>
         <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".55"/></filter>
       </defs>
-      <path id="nation" fill="url(#land)" filter="url(#shadow)"/>
+      <g class="zoom"><path id="nation" fill="url(#land)" filter="url(#shadow)"/></g>
     </svg>
     <canvas id="shade"></canvas>
     <svg id="top" viewBox="0 0 975 610">
       <defs>
         <radialGradient id="glow"><stop offset="0" stop-color="#ffe7a8" stop-opacity=".95"/><stop offset=".35" stop-color="#ffc65c" stop-opacity=".45"/><stop offset="1" stop-color="#ffc65c" stop-opacity="0"/></radialGradient>
       </defs>
-      <path class="states"/><path class="zones"/><g id="cities"></g>
+      <g class="zoom"><path class="states"/><path class="zones"/><g id="cities"></g></g>
     </svg>
+    </div>
+    <button id="reset" hidden>Reset zoom</button>
     <div id="tip" hidden></div>
   </div>
 </main>
@@ -163,11 +172,16 @@
 <script type="module">
 import { geoAlbersUsa, geoContains, geoPath } from "https://cdn.jsdelivr.net/npm/d3-geo@3/+esm";
 import { feature, mesh } from "https://cdn.jsdelivr.net/npm/topojson-client@3/+esm";
+import { zoom, zoomIdentity } from "https://cdn.jsdelivr.net/npm/d3-zoom@3/+esm";
+// Same pinned URL d3-zoom imports, so there is one d3-selection instance (with d3-transition attached).
+import { select } from "https://cdn.jsdelivr.net/npm/d3-selection@3.0.1/+esm";
 
 const VW = 975, VH = 610, RAD = Math.PI / 180, RISE = -0.833;
 const $ = s => document.querySelector(s);
 const projection = geoAlbersUsa().scale(1300).translate([VW / 2, VH / 2]);
 const path = geoPath(projection);
+// Projection for the current zoom, in viewBox units; SVG layers keep `projection` and get a <g> transform instead.
+let view = projection, rendered = zoomIdentity, gesturing = false;
 
 // [name, standard UTC offset, follows the DST toggle]
 const ZONES = [["", 0, 0], ["Eastern", -5, 1], ["Central", -6, 1], ["Mountain", -7, 1], ["Mountain (Arizona)", -7, 0],
@@ -237,6 +251,7 @@ for (let b = 0; b < 2048; b++) {
 
 const us = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json").then(r => r.json());
 const counties = feature(us, us.objects.counties).features;
+counties.forEach(f => f.box = path.bounds(f));
 const nation = feature(us, us.objects.nation);
 const stateName = new Map(feature(us, us.objects.states).features.map(f => [f.id, f.properties.name]));
 $("#nation").setAttribute("d", path(nation));
@@ -246,7 +261,7 @@ const drawZoneLines = () => $(".zones").setAttribute("d", path(mesh(us, us.objec
 
 $("#cities").innerHTML = CITIES.map(([name, lon, lat, left]) => {
   const [x, y] = projection([lon, lat]);
-  return `<g class="city" transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><circle class="glow" r="11" fill="url(#glow)"/><circle class="dot" r="2.6"/>` +
+  return `<g class="city" data-x="${x.toFixed(1)}" data-y="${y.toFixed(1)}" transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><circle class="glow" r="11" fill="url(#glow)"/><circle class="dot" r="2.6"/>` +
     `<text x="${left ? -6 : 6}" y="4" text-anchor="${left ? "end" : "start"}">${name}</text></g>`;
 }).join("");
 const cityEls = [...document.querySelectorAll(".city")];
@@ -256,9 +271,13 @@ function setup() {
   const r = stage.getBoundingClientRect();
   dpr = Math.min(devicePixelRatio || 1, 2);
   W = shade.width = Math.round(r.width * dpr); H = shade.height = Math.round(r.height * dpr);
-  const k = W / VW, c = new OffscreenCanvas(W, H), x = c.getContext("2d", { willReadFrequently: true }), p = geoPath(projection, x);
+  const k = W / VW, c = new OffscreenCanvas(W, H), x = c.getContext("2d", { willReadFrequently: true }), p = geoPath(view, x);
   x.setTransform(k, 0, 0, k, 0, 0); x.lineWidth = 1.5 / k;
+  // Skip counties outside the zoomed viewport (bounds are in unzoomed viewBox units).
+  const s = VW / stage.clientWidth, z = rendered.k, vx = -rendered.x * s / z, vy = -rendered.y * s / z, vw = VW / z, vh = VH / z;
   counties.forEach((f, i) => {
+    const [[x1, y1], [x2, y2]] = f.box;
+    if (x2 < vx - 2 || x1 > vx + vw + 2 || y2 < vy - 2 || y1 > vy + vh + 2) return;
     x.fillStyle = x.strokeStyle = `rgb(${zoneOf(f.id) * 30},${(i + 1) >> 8},${(i + 1) & 255})`;
     x.beginPath(); p(f); x.fill(); x.stroke();
   });
@@ -269,21 +288,35 @@ function setup() {
   for (let i = 0; i < W * H; i++) if (alpha[i * 4 + 3] && ids[i * 4]) count++;
   pix = new Int32Array(count); zn = new Uint8Array(count); cov = new Uint8Array(count);
   P = new Float32Array(count); Q = new Float32Array(count); CL = new Float32Array(count); SL = new Float32Array(count);
+  // Invert on a coarse grid and interpolate; fall back to an exact invert where corners disagree (insets, antimeridian, off-map).
+  const G = 4, GW = Math.floor(W / G) + 2, GH = Math.floor(H / G) + 2, grid = new Float64Array(GW * GH * 2).fill(NaN);
+  for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+    const ll = view.invert([gx * G / k, gy * G / k]);
+    if (ll) grid.set(ll, (gy * GW + gx) * 2);
+  }
   n = 0;
   for (let y = 0; y < H; y++) for (let x0 = 0; x0 < W; x0++) {
     const i = y * W + x0, a = alpha[i * 4 + 3], z = Math.round(ids[i * 4] / 30);
     if (!a || !z) continue;
-    const ll = projection.invert([(x0 + .5) / k, (y + .5) / k]);
-    if (!ll) continue;
-    const [lon, lat] = ll;
+    const fx = (x0 + .5) / G, fy = (y + .5) / G, gx = fx | 0, gy = fy | 0, tx = fx - gx, ty = fy - gy, g = (gy * GW + gx) * 2, g2 = g + GW * 2;
+    const o0 = grid[g], o1 = grid[g + 2], o2 = grid[g2], o3 = grid[g2 + 2];
+    let lon, lat;
+    if (Math.max(o0, o1, o2, o3) - Math.min(o0, o1, o2, o3) < 2) { // false if any corner is NaN
+      lon = (o0 * (1 - tx) + o1 * tx) * (1 - ty) + (o2 * (1 - tx) + o3 * tx) * ty;
+      lat = (grid[g + 1] * (1 - tx) + grid[g + 3] * tx) * (1 - ty) + (grid[g2 + 1] * (1 - tx) + grid[g2 + 3] * tx) * ty;
+    } else {
+      const ll = view.invert([(x0 + .5) / k, (y + .5) / k]);
+      if (!ll) continue;
+      [lon, lat] = ll;
+    }
     pix[n] = i; zn[n] = fixZone(z, lon); cov[n] = a;
     P[n] = Math.sin(lat * RAD); Q[n] = Math.cos(lat * RAD); CL[n] = Math.cos(lon * RAD); SL[n] = Math.sin(lon * RAD);
     n++;
   }
   img = ctx.createImageData(W, H); buf = new Uint32Array(img.data.buffer);
   CITIES.forEach(c => {
-    const [px, py] = projection([c[1], c[2]]);
-    c.zone = fixZone(Math.round(ids[(Math.round(py * k) * W + Math.round(px * k)) * 4] / 30), c[1]);
+    const [px, py] = view([c[1], c[2]]).map(v => Math.round(v * k));
+    c.zone = px >= 0 && py >= 0 && px < W && py < H ? fixZone(Math.round(ids[(py * W + px) * 4] / 30), c[1]) : c.zone;
   });
   draw();
 }
@@ -310,9 +343,9 @@ let queued = false;
 const redraw = () => queued || (queued = true, requestAnimationFrame(() => { queued = false; draw(); }));
 
 function updateTip() {
-  if (!hover || !ids) return tip.hidden = true;
+  if (!hover || !ids || gesturing) return tip.hidden = true;
   const r = stage.getBoundingClientRect(), i = (Math.floor(hover.y * dpr) * W + Math.floor(hover.x * dpr)) * 4;
-  const ll = projection.invert([hover.x * VW / r.width, hover.y * VW / r.width]), raw = ids[i];
+  const ll = view.invert([hover.x * VW / r.width, hover.y * VW / r.width]), raw = ids[i];
   if (!ll || !raw || hover.x < 0 || hover.y < 0 || hover.x >= r.width || hover.y >= r.height) return tip.hidden = true;
   const z = fixZone(Math.round(raw / 30), ll[0]), off = offsetOf(z);
   // Anti-aliased county edges blend the encoded index, so confirm the hit and fall back to a search.
@@ -354,8 +387,42 @@ $("#play").onclick = () => {
 };
 
 setMode(mode);
+// Zoom: CSS-transform the last render during a gesture, then re-render sharp at the new zoom when it ends.
+const map = $("#map"), stageSel = select(stage);
+function render(t) {
+  rendered = t;
+  const s = VW / stage.clientWidth, tx = t.x * s, ty = t.y * s;
+  view = geoAlbersUsa().scale(1300 * t.k).translate([VW / 2 * t.k + tx, VH / 2 * t.k + ty]);
+  document.querySelectorAll(".zoom").forEach(g => g.setAttribute("transform", `translate(${tx},${ty}) scale(${t.k})`));
+  cityEls.forEach(g => g.setAttribute("transform", `translate(${g.dataset.x},${g.dataset.y}) scale(${1 / t.k})`));
+  setup();
+  map.style.transform = "";
+  $("#reset").hidden = t.k === 1;
+}
+let settleTimer;
+const zoomer = zoom().scaleExtent([1, 12])
+  .filter(e => !e.target.closest("#reset") && (!e.ctrlKey || e.type === "wheel") && !e.button)
+  .on("start", () => { gesturing = true; clearTimeout(settleTimer); updateTip(); })
+  .on("zoom", ({ transform: t }) => {
+    const k = t.k / rendered.k;
+    map.style.transform = `translate(${t.x - rendered.x * k}px,${t.y - rendered.y * k}px) scale(${k})`;
+  })
+  .on("end", ({ transform: t }) => {
+    gesturing = false; updateTip();
+    settleTimer = setTimeout(() => t.k === rendered.k && t.x === rendered.x && t.y === rendered.y || render(t), 250);
+  });
+stageSel.call(zoomer);
+$("#reset").onclick = () => stageSel.transition().duration(450).call(zoomer.transform, zoomIdentity);
+
 let resizeTimer;
-new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(setup, 150); }).observe(stage);
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    zoomer.translateExtent([[0, 0], [stage.clientWidth, stage.clientHeight]]);
+    stageSel.property("__zoom", zoomIdentity);
+    render(zoomIdentity);
+  }, 150);
+}).observe(stage);
 </script>
 </body>
 </html>
