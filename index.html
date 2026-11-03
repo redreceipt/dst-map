@@ -103,13 +103,20 @@
   #date::-moz-range-thumb { width: 18px; height: 18px; }
   input[type=range]:focus-visible { outline: 2px solid var(--sun); outline-offset: 4px; border-radius: 8px; }
   .credit { margin: 10px 0 0; text-align: center; font-size: 11px; color: #7a84ab; }
+  /* Phones: one-line title and slim controls so the map gets the screen. */
   @media (max-width: 720px) {
-    header { padding: 16px 16px 28px; } footer { padding: 28px 12px 12px; }
-    .card { width: 100%; }
-    .seg button { padding: 8px 4px; }
-    .dock { grid-template-columns: auto 1fr; gap: 10px 14px; padding: 12px 14px; }
-    .dock .slider { grid-column: 1 / -1; }
-    #reset { right: 12px; }
+    header { gap: 8px; padding: 10px 10px 16px; } footer { padding: 16px 8px 8px; }
+    h1 { font-size: 20px; } h1 br, .sub, .legend, .cap, .credit { display: none; }
+    .card { width: 100%; padding: 6px 8px 2px; border-radius: 14px; }
+    .seg button { padding: 6px 2px; font-size: 12px; }
+    .note { margin-top: 5px; font-size: 11px; }
+    .row { margin: 4px 2px 0; font-size: 12px; }
+    #date { height: 22px; }
+    .dock { grid-template-columns: auto 74px 1fr; gap: 10px; padding: 6px 12px 4px 8px; border-radius: 16px; }
+    #play { width: 36px; height: 36px; font-size: 13px; }
+    #clock { font-size: 18px; }
+    .ticks { font-size: 10px; } .ticks span:nth-child(even) { visibility: hidden; }
+    #reset { right: 8px; }
   }
   #stage:not(.labels) .city text { display: none; }
   @media (max-height: 560px) {
@@ -122,7 +129,7 @@
 <body>
 <header>
   <div>
-    <h1>Keep switching,<br>or <em>lock the clock</em>?</h1>
+    <h1>Keep switching,<br> or <em>lock the clock</em>?</h1>
     <p class="sub">Compare today's twice-a-year switch with always-standard and always-daylight time. Drag the clock to see who's in daylight and who's in the dark at the same local time. Pinch or scroll to zoom.</p>
   </div>
   <div class="card">
@@ -233,7 +240,7 @@ CITIES.forEach(c => c.zone = fixZone(zoneOf(counties.find(f => geoContains(f, [c
 
 // Fit the whole country into the open area between header and footer.
 function fitMap() {
-  const m = $("main").getBoundingClientRect(), [[x0, y0], [x1, y1]] = nationBox, pad = 16;
+  const m = $("main").getBoundingClientRect(), [[x0, y0], [x1, y1]] = nationBox, pad = innerWidth > 720 ? 16 : 4;
   const l = m.left + pad, r = m.right - pad, t = m.top - pad, b = m.bottom + pad;
   const k = Math.min((r - l) / (x1 - x0), (b - t) / (y1 - y0));
   fit = { k, x: (l + r) / 2 - k * (x0 + x1) / 2, y: (t + b) / 2 - k * (y0 + y1) / 2 };
