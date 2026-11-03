@@ -27,21 +27,26 @@
 <meta name="twitter:image:alt" content="U.S. map at 8:00 AM on December 21 under permanent DST: Michigan, Indiana and western parts of each time zone are still dark.">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Permanent DST vs. Standard Time: Interactive Sunlight Map","url":"https://dstmap.us/","applicationCategory":"EducationalApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Michael Neeley","url":"https://redreceipt.github.io/"}}</script>
 <style>
-  :root { --panel: rgba(17, 23, 46, .66); --line: rgba(255,255,255,.11); --text: #eef1fb; --muted: #97a2c4; --sun: #ffc65c; }
+  :root { --panel: rgba(17, 23, 46, .66); --line: rgba(255,255,255,.11); --text: #eef1fb; --muted: #97a2c4; --sun: #ffc65c; --scrim: 6, 9, 22; }
   * { box-sizing: border-box; }
   html { background: #05070f; }
   html, body { margin: 0; }
   body {
-    min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
+    height: 100svh; overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
     font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", system-ui, sans-serif;
     color: var(--text); -webkit-font-smoothing: antialiased;
-    background: radial-gradient(1100px 680px at 50% 40%, #18244a 0%, #0b1126 55%, #05070f 100%) no-repeat;
+    background: radial-gradient(1100px 680px at 50% 50%, #18244a 0%, #0b1126 55%, #05070f 100%) no-repeat;
   }
-  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px 28px; padding: 26px 32px 0; }
-  h1 { margin: 0; font-size: clamp(24px, 3.2vw, 38px); line-height: 1.08; letter-spacing: -.025em; font-weight: 760; }
+  /* The map fills the window; header and footer float over it, letting drags and pinches through except on their panels. */
+  header, footer { position: relative; z-index: 1; pointer-events: none; }
+  .card, .dock, #reset { pointer-events: auto; }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px 28px; padding: 26px 32px 36px;
+    background: linear-gradient(rgba(var(--scrim), .85), rgba(var(--scrim), .55) 70%, rgba(var(--scrim), 0)); }
+  footer { padding: 36px 32px 18px; background: linear-gradient(rgba(var(--scrim), 0), rgba(var(--scrim), .55) 30%, rgba(var(--scrim), .85)); }
+  h1 { margin: 0; font-size: clamp(24px, 3.2vw, 38px); line-height: 1.08; letter-spacing: -.025em; font-weight: 760; text-shadow: 0 2px 16px rgba(0,0,0,.5); }
   h1 em { font-style: normal; background: linear-gradient(90deg, #ffd98a, #ff9f43); -webkit-background-clip: text; background-clip: text; color: transparent; }
   header > div:first-child { flex: 1 1 320px; }
-  .sub { margin: 8px 0 0; color: var(--muted); max-width: 480px; }
+  .sub { margin: 8px 0 0; color: var(--muted); max-width: 480px; text-shadow: 0 1px 10px rgba(0,0,0,.6); }
   .card { width: 340px; max-width: 100%; padding: 14px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
   .seg { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: rgba(0,0,0,.32); }
@@ -53,16 +58,14 @@
   .row output { color: var(--text); font-weight: 650; }
   .legend { display: flex; gap: 14px; margin: 12px 2px 0; font-size: 12px; color: var(--muted); }
   .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
-  main { display: flex; align-items: center; justify-content: center; margin: 6px 20px; min-height: 0; }
-  #stage { position: relative; aspect-ratio: 975 / 610; width: min(100%, 1240px, 75svh * 1.598); }
-  #stage { overflow: hidden; border-radius: 18px; cursor: grab; }
+  main { min-height: 0; }
+  #stage { position: fixed; inset: 0; z-index: 0; cursor: grab; touch-action: none; }
   #stage:active { cursor: grabbing; }
   #map { position: absolute; inset: 0; transform-origin: 0 0; }
   #map > * { position: absolute; inset: 0; width: 100%; height: 100%; }
   #top { pointer-events: none; }
+  #stage.zoomed #nation { filter: none; }
   .states, .zones { vector-effect: non-scaling-stroke; }
-  #reset { position: absolute; right: 10px; bottom: 10px; z-index: 2; padding: 8px 12px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 650;
-    color: var(--text); background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   .states { fill: none; stroke: rgba(255,255,255,.6); stroke-width: .6; stroke-linejoin: round; }
   .zones { fill: none; stroke: var(--sun); stroke-width: 1.3; stroke-dasharray: 4 3; stroke-linejoin: round; opacity: .85; }
   .city text { font-size: 11px; font-weight: 650; fill: #fff; paint-order: stroke; stroke: rgba(6,9,22,.8); stroke-width: 3px; stroke-linejoin: round; }
@@ -70,12 +73,13 @@
   .city .dot { fill: #fff; stroke: rgba(6,9,22,.75); stroke-width: 1; transition: fill .25s; }
   .city.lit .glow { opacity: 1; }
   .city.lit .dot { fill: #ffe4a0; }
-  #tip { position: absolute; z-index: 2; pointer-events: none; min-width: 200px; padding: 10px 12px; border-radius: 12px; font-size: 13px;
-    background: rgba(10,14,32,.9); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.45); transform: translate(14px, -50%); }
+  #tip { position: fixed; left: 0; top: 0; z-index: 3; pointer-events: none; min-width: 200px; padding: 10px 12px; border-radius: 12px; font-size: 13px;
+    background: rgba(10,14,32,.92); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.45); }
   #tip b { display: block; font-size: 14px; }
   #tip .m { color: var(--muted); }
   #tip .s { margin-top: 6px; font-weight: 650; }
-  footer { padding: 0 32px 18px; }
+  #reset { position: absolute; right: 32px; top: 0; padding: 8px 14px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 650;
+    color: var(--text); background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   .dock { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: auto 170px 1fr; align-items: center; gap: 18px;
     padding: 14px 20px; border-radius: 22px; background: var(--panel); border: 1px solid var(--line);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
@@ -96,20 +100,20 @@
   #date::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -6px; }
   #date::-moz-range-thumb { width: 18px; height: 18px; }
   input[type=range]:focus-visible { outline: 2px solid var(--sun); outline-offset: 4px; border-radius: 8px; }
-  .credit { margin: 10px 0 0; text-align: center; font-size: 11px; color: #67719a; }
-  @media (min-width: 721px) and (min-height: 640px) {
-    body { height: 100svh; }
-    main { container-type: size; }
-    #stage { width: min(100cqw, 159.8cqh, 1240px); }
-  }
+  .credit { margin: 10px 0 0; text-align: center; font-size: 11px; color: #7a84ab; }
   @media (max-width: 720px) {
-    main { margin: 12px 8px; }
-    header { padding: 18px 16px 0; } footer { padding: 0 12px 14px; }
+    header { padding: 16px 16px 28px; } footer { padding: 28px 12px 12px; }
     .card { width: 100%; }
     .seg button { font-size: 13px; padding: 8px 6px; }
     .dock { grid-template-columns: auto 1fr; gap: 10px 14px; padding: 12px 14px; }
     .dock .slider { grid-column: 1 / -1; }
-    .city text { display: none; }
+    #reset { right: 12px; }
+  }
+  #stage:not(.labels) .city text { display: none; }
+  @media (max-height: 560px) {
+    header { padding-top: 10px; padding-bottom: 12px; } h1 { font-size: 20px; } .sub, .legend, .credit { display: none; }
+    .card { width: 300px; padding: 8px 10px; } .seg button { padding: 6px 8px; } .row { margin-top: 6px; }
+    footer { padding-top: 16px; padding-bottom: 8px; } .dock { padding: 6px 14px; gap: 12px; } #clock { font-size: 24px; } #play { width: 38px; height: 38px; }
   }
 </style>
 </head>
@@ -134,10 +138,10 @@
   </div>
 </header>
 
-<main>
-  <div id="stage">
-    <div id="map">
-    <svg id="base" viewBox="0 0 975 610" aria-label="Map of the United States">
+<main></main>
+<div id="stage">
+  <div id="map">
+    <svg id="base" aria-label="Map of the United States">
       <defs>
         <linearGradient id="land" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef1de"/><stop offset="1" stop-color="#d9e0c4"/></linearGradient>
         <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".55"/></filter>
@@ -145,19 +149,18 @@
       <g class="zoom"><path id="nation" fill="url(#land)" filter="url(#shadow)"/></g>
     </svg>
     <canvas id="shade"></canvas>
-    <svg id="top" viewBox="0 0 975 610">
+    <svg id="top">
       <defs>
         <radialGradient id="glow"><stop offset="0" stop-color="#ffe7a8" stop-opacity=".95"/><stop offset=".35" stop-color="#ffc65c" stop-opacity=".45"/><stop offset="1" stop-color="#ffc65c" stop-opacity="0"/></radialGradient>
       </defs>
       <g class="zoom"><path class="states"/><path class="zones"/><g id="cities"></g></g>
     </svg>
-    </div>
-    <button id="reset" hidden>Reset zoom</button>
-    <div id="tip" hidden></div>
   </div>
-</main>
+</div>
+<div id="tip" hidden></div>
 
 <footer>
+  <button id="reset" hidden>Reset zoom</button>
   <div class="dock">
     <button id="play" aria-label="Play">▶</button>
     <div><div id="clock"></div><div class="cap">local time, every zone</div></div>
@@ -175,55 +178,25 @@ import { feature, mesh } from "https://cdn.jsdelivr.net/npm/topojson-client@3/+e
 import { zoom, zoomIdentity } from "https://cdn.jsdelivr.net/npm/d3-zoom@3/+esm";
 // Same pinned URL d3-zoom imports, so there is one d3-selection instance (with d3-transition attached).
 import { select } from "https://cdn.jsdelivr.net/npm/d3-selection@3.0.1/+esm";
+import { RAD, RISE, BASE, CENTER, ZONES, zoneOf, fixZone, offsetOf, sun, hourAngle0 } from "./sun.js";
 
-const VW = 975, VH = 610, RAD = Math.PI / 180, RISE = -0.833;
 const $ = s => document.querySelector(s);
-const projection = geoAlbersUsa().scale(1300).translate([VW / 2, VH / 2]);
-const path = geoPath(projection);
-// Projection for the current zoom, in viewBox units; SVG layers keep `projection` and get a <g> transform instead.
-let view = projection, rendered = zoomIdentity, gesturing = false;
-
-// [name, standard UTC offset, follows the DST toggle]
-const ZONES = [["", 0, 0], ["Eastern", -5, 1], ["Central", -6, 1], ["Mountain", -7, 1], ["Mountain (Arizona)", -7, 0],
-  ["Pacific", -8, 1], ["Alaska", -9, 1], ["Hawaii", -10, 0], ["Hawaii–Aleutian", -10, 1]];
-const BY_STATE = {
-  1: "09 10 11 12 13 18 21 23 24 25 26 33 34 36 37 39 42 44 45 50 51 54",
-  2: "01 05 17 19 20 22 27 28 29 31 38 40 46 47 48 55", 3: "08 16 30 35 49 56", 4: "04", 5: "06 32 41 53", 6: "02", 7: "15" };
-// Counties whose zone differs from their state's (county-level approximation of the official boundaries).
-const BY_COUNTY = {
-  1: "47001 47009 47011 47013 47019 47025 47029 47057 47059 47063 47065 47067 47073 47089 47091 47093 47105 47107 47121 47123 47129 47139 47143 47145 47151 47155 47163 47171 47173 47179",
-  2: "12005 12013 12033 12045 12059 12063 12091 12113 12131 12133 18051 18073 18089 18091 18111 18123 18127 18129 18147 18149 18163 18173 26043 26053 26071 26109 " +
-     "21001 21003 21007 21009 21027 21031 21033 21035 21039 21047 21053 21055 21057 21059 21061 21075 21083 21085 21087 21091 21099 21101 21105 21107 21139 21141 21143 21145 21149 21157 21169 21171 21177 21183 21207 21213 21219 21221 21225 21227 21233",
-  3: "38001 38007 38011 38033 38037 38041 38085 38087 38089 46007 46019 46031 46033 46041 46047 46055 46063 46071 46081 46093 46102 46103 46105 46113 46117 46137 " +
-     "31005 31007 31013 31029 31033 31045 31049 31057 31069 31075 31091 31101 31105 31123 31135 31157 31161 31165 20071 20075 20181 20199 48141 48229 41045",
-  5: "16009 16017 16021 16035 16049 16055 16057 16061 16069 16079" };
-const zoneById = new Map();
-for (const [z, ids] of Object.entries(BY_STATE)) for (const id of ids.split(" ")) zoneById.set(id, +z);
-for (const [z, ids] of Object.entries(BY_COUNTY)) for (const id of ids.split(" ")) zoneById.set(id, +z);
-const zoneOf = id => zoneById.get(id) ?? zoneById.get(id.slice(0, 2)) ?? 0;
-// Aleutians west of 169°30'W are on Hawaii–Aleutian time.
-const fixZone = (z, lon) => z === 6 && (lon < -169.5 || lon > 0) ? 8 : z;
+const path = geoPath(geoAlbersUsa().scale(BASE).translate(CENTER));
+const worker = new Worker(new URL("./shade.js", import.meta.url), { type: "module" });
 
 const CITIES = [["Seattle", -122.33, 47.61], ["San Francisco", -122.42, 37.77], ["Los Angeles", -118.24, 34.05, 1], ["Phoenix", -112.07, 33.45],
   ["Denver", -104.99, 39.74], ["Dallas", -96.8, 32.78], ["Houston", -95.37, 29.76], ["Minneapolis", -93.27, 44.98], ["Chicago", -87.63, 41.88, 1],
   ["Detroit", -83.05, 42.33], ["Atlanta", -84.39, 33.75], ["Miami", -80.19, 25.76], ["Washington", -77.04, 38.9, 1], ["New York", -74.0, 40.71],
   ["Boston", -71.06, 42.36], ["Anchorage", -149.9, 61.22], ["Honolulu", -157.86, 21.31]];
 
-let mode = "dst", minutes = 480, doy = 355, sunNow, W, H, dpr, ids, n, pix, zn, cov, P, Q, CL, SL, img, buf, hover, playing = false;
-const shade = $("#shade"), ctx = shade.getContext("2d"), stage = $("#stage"), tip = $("#tip");
-const offsetOf = z => ZONES[z][1] + (mode === "dst" && ZONES[z][2] ? 1 : 0);
+let mode = "dst", minutes = 480, doy = 355, sunNow = sun(doy), hover, playing = false, gesturing = false;
+// Map transforms are {k, x, y}: screen = k·p + (x, y) for a point p in unzoomed (975×610) units.
+let fit, current = zoomIdentity, shown, rendered;
+const stage = $("#stage"), map = $("#map"), tip = $("#tip"), shade = $("#shade"), bitmaps = shade.getContext("bitmaprenderer");
+const screenOf = t => ({ k: t.k * fit.k, x: t.k * fit.x + t.x, y: t.k * fit.y + t.y });
 
-// NOAA fractional-year approximation: declination (rad) and equation of time (min).
-function sun(d) {
-  const g = 2 * Math.PI / 365 * (d - 1);
-  return {
-    dec: 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g),
-    eqt: 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g)) };
-}
-// Hour angle (rad) at longitude 0 for local clock `m` in a zone at UTC offset `off`; add lon for the place.
-const hourAngle0 = (m, off) => ((m - off * 60 + sunNow.eqt) / 4 - 180) * RAD;
 const elevation = (lon, lat, off, m) => Math.asin(Math.sin(lat * RAD) * Math.sin(sunNow.dec) +
-  Math.cos(lat * RAD) * Math.cos(sunNow.dec) * Math.cos(hourAngle0(m, off) + lon * RAD)) / RAD;
+  Math.cos(lat * RAD) * Math.cos(sunNow.dec) * Math.cos(hourAngle0(sunNow, m, off) + lon * RAD)) / RAD;
 function riseSet(lon, lat, off) {
   const c = (Math.sin(RISE * RAD) - Math.sin(lat * RAD) * Math.sin(sunNow.dec)) / (Math.cos(lat * RAD) * Math.cos(sunNow.dec));
   if (c > 1) return "Polar night: no sunrise";
@@ -237,117 +210,86 @@ function fmt(m) {
   return `${(h + 11) % 12 + 1}:${String(m % 60).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
-// Overlay color by sun elevation (deg): clear by day, warm at the horizon, deep blue at night.
-const KEYS = [[10, 255, 196, 120, 0], [4, 255, 178, 96, .1], [0, 252, 128, 84, .28], [-3, 168, 76, 112, .46],
-  [-6, 52, 44, 112, .62], [-12, 16, 20, 56, .8], [-18, 8, 11, 32, .87]];
-const LUT = new Uint32Array(2048);
-for (let b = 0; b < 2048; b++) {
-  const e = Math.asin(Math.min(1, b / 1023.5 - 1)) / RAD;
-  const j = KEYS.findIndex(k => k[0] <= e), hi = KEYS.at(j), lo = j <= 0 ? hi : KEYS[j - 1];
-  const t = lo === hi ? 0 : (lo[0] - e) / (lo[0] - hi[0]);
-  const c = [1, 2, 3, 4].map(i => lo[i] + (hi[i] - lo[i]) * t);
-  LUT[b] = ((Math.round(c[3] * 255) << 24) | (Math.round(c[2]) << 16) | (Math.round(c[1]) << 8) | Math.round(c[0])) >>> 0;
-}
-
 const us = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json").then(r => r.json());
 const counties = feature(us, us.objects.counties).features;
-counties.forEach(f => f.box = path.bounds(f));
-const nation = feature(us, us.objects.nation);
+const nation = feature(us, us.objects.nation), nationBox = path.bounds(nation);
 const stateName = new Map(feature(us, us.objects.states).features.map(f => [f.id, f.properties.name]));
 $("#nation").setAttribute("d", path(nation));
 $(".states").setAttribute("d", path(mesh(us, us.objects.states, (a, b) => a !== b)));
 const drawZoneLines = () => $(".zones").setAttribute("d", path(mesh(us, us.objects.counties,
-  (a, b) => a !== b && offsetOf(zoneOf(a.id)) !== offsetOf(zoneOf(b.id)))));
+  (a, b) => a !== b && offsetOf(zoneOf(a.id), mode) !== offsetOf(zoneOf(b.id), mode))));
 
 $("#cities").innerHTML = CITIES.map(([name, lon, lat, left]) => {
-  const [x, y] = projection([lon, lat]);
-  return `<g class="city" data-x="${x.toFixed(1)}" data-y="${y.toFixed(1)}" transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><circle class="glow" r="11" fill="url(#glow)"/><circle class="dot" r="2.6"/>` +
+  const [x, y] = path.projection()([lon, lat]);
+  return `<g class="city" data-x="${x.toFixed(1)}" data-y="${y.toFixed(1)}"><circle class="glow" r="11" fill="url(#glow)"/><circle class="dot" r="2.6"/>` +
     `<text x="${left ? -6 : 6}" y="4" text-anchor="${left ? "end" : "start"}">${name}</text></g>`;
 }).join("");
 const cityEls = [...document.querySelectorAll(".city")];
+CITIES.forEach(c => c.zone = fixZone(zoneOf(counties.find(f => geoContains(f, [c[1], c[2]])).id), c[1]));
 
-// Rasterize zones (R) and county index (G,B) plus land coverage at device resolution, then invert every land pixel to lon/lat once.
-function setup() {
-  const r = stage.getBoundingClientRect();
-  dpr = Math.min(devicePixelRatio || 1, 2);
-  W = shade.width = Math.round(r.width * dpr); H = shade.height = Math.round(r.height * dpr);
-  const k = W / VW, c = new OffscreenCanvas(W, H), x = c.getContext("2d", { willReadFrequently: true }), p = geoPath(view, x);
-  x.setTransform(k, 0, 0, k, 0, 0); x.lineWidth = 1.5 / k;
-  // Skip counties outside the zoomed viewport (bounds are in unzoomed viewBox units).
-  const s = VW / stage.clientWidth, z = rendered.k, vx = -rendered.x * s / z, vy = -rendered.y * s / z, vw = VW / z, vh = VH / z;
-  counties.forEach((f, i) => {
-    const [[x1, y1], [x2, y2]] = f.box;
-    if (x2 < vx - 2 || x1 > vx + vw + 2 || y2 < vy - 2 || y1 > vy + vh + 2) return;
-    x.fillStyle = x.strokeStyle = `rgb(${zoneOf(f.id) * 30},${(i + 1) >> 8},${(i + 1) & 255})`;
-    x.beginPath(); p(f); x.fill(); x.stroke();
-  });
-  ids = x.getImageData(0, 0, W, H).data;
-  x.clearRect(0, 0, VW, VH); x.fillStyle = "#000"; x.beginPath(); p(nation); x.fill();
-  const alpha = x.getImageData(0, 0, W, H).data;
-  let count = 0;
-  for (let i = 0; i < W * H; i++) if (alpha[i * 4 + 3] && ids[i * 4]) count++;
-  pix = new Int32Array(count); zn = new Uint8Array(count); cov = new Uint8Array(count);
-  P = new Float32Array(count); Q = new Float32Array(count); CL = new Float32Array(count); SL = new Float32Array(count);
-  // Invert on a coarse grid and interpolate; fall back to an exact invert where corners disagree (insets, antimeridian, off-map).
-  const G = 4, GW = Math.floor(W / G) + 2, GH = Math.floor(H / G) + 2, grid = new Float64Array(GW * GH * 2).fill(NaN);
-  for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
-    const ll = view.invert([gx * G / k, gy * G / k]);
-    if (ll) grid.set(ll, (gy * GW + gx) * 2);
-  }
-  n = 0;
-  for (let y = 0; y < H; y++) for (let x0 = 0; x0 < W; x0++) {
-    const i = y * W + x0, a = alpha[i * 4 + 3], z = Math.round(ids[i * 4] / 30);
-    if (!a || !z) continue;
-    const fx = (x0 + .5) / G, fy = (y + .5) / G, gx = fx | 0, gy = fy | 0, tx = fx - gx, ty = fy - gy, g = (gy * GW + gx) * 2, g2 = g + GW * 2;
-    const o0 = grid[g], o1 = grid[g + 2], o2 = grid[g2], o3 = grid[g2 + 2];
-    let lon, lat;
-    if (Math.max(o0, o1, o2, o3) - Math.min(o0, o1, o2, o3) < 2) { // false if any corner is NaN
-      lon = (o0 * (1 - tx) + o1 * tx) * (1 - ty) + (o2 * (1 - tx) + o3 * tx) * ty;
-      lat = (grid[g + 1] * (1 - tx) + grid[g + 3] * tx) * (1 - ty) + (grid[g2 + 1] * (1 - tx) + grid[g2 + 3] * tx) * ty;
-    } else {
-      const ll = view.invert([(x0 + .5) / k, (y + .5) / k]);
-      if (!ll) continue;
-      [lon, lat] = ll;
-    }
-    pix[n] = i; zn[n] = fixZone(z, lon); cov[n] = a;
-    P[n] = Math.sin(lat * RAD); Q[n] = Math.cos(lat * RAD); CL[n] = Math.cos(lon * RAD); SL[n] = Math.sin(lon * RAD);
-    n++;
-  }
-  img = ctx.createImageData(W, H); buf = new Uint32Array(img.data.buffer);
-  CITIES.forEach(c => {
-    const [px, py] = view([c[1], c[2]]).map(v => Math.round(v * k));
-    c.zone = px >= 0 && py >= 0 && px < W && py < H ? fixZone(Math.round(ids[(py * W + px) * 4] / 30), c[1]) : c.zone;
-  });
-  draw();
+// Fit the whole country into the open area between header and footer.
+function fitMap() {
+  const m = $("main").getBoundingClientRect(), [[x0, y0], [x1, y1]] = nationBox, pad = 16;
+  const l = m.left + pad, r = m.right - pad, t = m.top - pad, b = m.bottom + pad;
+  const k = Math.min((r - l) / (x1 - x0), (b - t) / (y1 - y0));
+  fit = { k, x: (l + r) / 2 - k * (x0 + x1) / 2, y: (t + b) / 2 - k * (y0 + y1) / 2 };
 }
 
-function draw() {
-  if (!img) return;
+// Show `m` in the SVG layers (the canvas bitmap is painted for it), then CSS-transform both to the live zoom.
+function show(m) {
+  shown = m;
+  document.querySelectorAll(".zoom").forEach(g => g.setAttribute("transform", `translate(${m.x},${m.y}) scale(${m.k})`));
+  cityEls.forEach(g => g.setAttribute("transform", `translate(${g.dataset.x},${g.dataset.y}) scale(${1 / m.k})`));
+  stage.classList.toggle("zoomed", m.k > fit.k * 1.01);
+  stage.classList.toggle("labels", m.k >= .7); // city names only once the map is drawn large enough to fit them
+  sync();
+}
+function sync() {
+  const c = screenOf(current), k = c.k / shown.k, x = c.x - shown.x * k, y = c.y - shown.y * k;
+  const same = Math.abs(k - 1) < 1e-6 && Math.abs(x) < .01 && Math.abs(y) < .01;
+  map.style.transform = same ? "" : `translate(${x}px,${y}px) scale(${k})`;
+  $("#reset").hidden = current.k < 1.001;
+  return same;
+}
+
+// One worker request in flight; newer state coalesces into the next one.
+let busy = false, needSetup = false, needDraw = false;
+function request(setup) { setup ? needSetup = true : needDraw = true; pump(); }
+function pump() {
+  if (busy || !(needSetup || needDraw) || !rendered && !needSetup) return;
+  const msg = { state: { minutes, doy, mode } }, w = innerWidth, h = innerHeight;
+  if (needSetup) msg.setup = { cssW: w, cssH: h, dpr: Math.min(devicePixelRatio || 1, 2, Math.sqrt(6e6 / (w * h))), M: screenOf(current) };
+  busy = true; needSetup = needDraw = false;
+  worker.postMessage(msg);
+}
+worker.onmessage = ({ data: { bitmap, setup: s } }) => {
+  busy = false;
+  if (s) {
+    shade.width = s.W; shade.height = s.H;
+    rendered = { ...s, view: geoAlbersUsa().scale(BASE * s.M.k).translate([CENTER[0] * s.M.k + s.M.x, CENTER[1] * s.M.k + s.M.y]) };
+    bitmaps.transferFromImageBitmap(bitmap);
+    show(s.M);
+    if (!gesturing) map.style.willChange = "";
+    updateTip();
+  } else bitmaps.transferFromImageBitmap(bitmap);
+  pump();
+};
+
+function update() {
   sunNow = sun(doy);
-  const sd = Math.sin(sunNow.dec), cd = Math.cos(sunNow.dec), cA = new Float32Array(9), sA = new Float32Array(9);
-  for (let z = 1; z < 9; z++) { const a = hourAngle0(minutes, offsetOf(z)); cA[z] = Math.cos(a) * cd; sA[z] = Math.sin(a) * cd; }
-  // sin(elev) = sinφ·sinδ + cosφ·cosδ·cos(H0 + λ), with cos(H0 + λ) expanded so the per-pixel loop has no trig.
-  for (let j = 0; j < n; j++) {
-    const z = zn[j], s = P[j] * sd + Q[j] * (cA[z] * CL[j] - sA[z] * SL[j]);
-    let c = LUT[((s + 1) * 1023.5) | 0];
-    if (cov[j] !== 255) c = ((((c >>> 24) * cov[j] / 255) << 24) | (c & 0xffffff)) >>> 0;
-    buf[pix[j]] = c;
-  }
-  ctx.putImageData(img, 0, 0);
-  CITIES.forEach((c, i) => cityEls[i].classList.toggle("lit", elevation(c[1], c[2], offsetOf(c.zone), minutes) < -2));
+  CITIES.forEach((c, i) => cityEls[i].classList.toggle("lit", elevation(c[1], c[2], offsetOf(c.zone, mode), minutes) < -2));
   $("#clock").textContent = fmt(minutes);
   $("#dateOut").textContent = new Date(2026, 0, doy).toLocaleDateString("en-US", { month: "long", day: "numeric" });
   updateTip();
+  request(false);
 }
-let queued = false;
-const redraw = () => queued || (queued = true, requestAnimationFrame(() => { queued = false; draw(); }));
 
 function updateTip() {
-  if (!hover || !ids || gesturing) return tip.hidden = true;
-  const r = stage.getBoundingClientRect(), i = (Math.floor(hover.y * dpr) * W + Math.floor(hover.x * dpr)) * 4;
-  const ll = view.invert([hover.x * VW / r.width, hover.y * VW / r.width]), raw = ids[i];
-  if (!ll || !raw || hover.x < 0 || hover.y < 0 || hover.x >= r.width || hover.y >= r.height) return tip.hidden = true;
-  const z = fixZone(Math.round(raw / 30), ll[0]), off = offsetOf(z);
+  if (!hover || !rendered || gesturing || map.style.transform) return tip.hidden = true;
+  const { ids, W, H, dpr, view } = rendered, px = Math.floor(hover.x * dpr), py = Math.floor(hover.y * dpr);
+  const i = (py * W + px) * 4, ll = view.invert([hover.x, hover.y]);
+  if (px < 0 || py < 0 || px >= W || py >= H || !ll || !ids[i]) return tip.hidden = true;
+  const z = fixZone(Math.round(ids[i] / 30), ll[0]), off = offsetOf(z, mode);
   // Anti-aliased county edges blend the encoded index, so confirm the hit and fall back to a search.
   let f = counties[ids[i + 1] * 256 + ids[i + 2] - 1];
   if (!f || !geoContains(f, ll)) f = counties.find(c => geoContains(c, ll));
@@ -358,27 +300,53 @@ function updateTip() {
     `<div class="m">${ZONES[z][0]} · UTC${off < 0 ? "−" : "+"}${Math.abs(off)}</div><div>${riseSet(ll[0], ll[1], off)}</div>` +
     `<div class="s">${state} at ${fmt(minutes)}</div>`;
   tip.hidden = false;
-  tip.style.left = `${Math.max(0, Math.min(hover.x, r.width - tip.offsetWidth - 14))}px`; tip.style.top = `${hover.y}px`;
+  // Above-right of the pointer so the cursor (or finger) never covers it; flip at the window edges.
+  const gap = 18, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = hover.x + gap, y = hover.y - h - gap;
+  if (x + w > innerWidth - 8) x = hover.x - gap - w;
+  if (y < 8) y = hover.y + gap + 8;
+  tip.style.transform = `translate(${Math.max(8, x)}px,${y}px)`;
 }
-const onPointer = e => { const r = stage.getBoundingClientRect(); hover = { x: e.clientX - r.left, y: e.clientY - r.top }; updateTip(); };
+const onPointer = e => { hover = { x: e.clientX, y: e.clientY }; updateTip(); };
 stage.addEventListener("pointermove", onPointer);
 stage.addEventListener("pointerdown", onPointer);
 stage.addEventListener("pointerleave", e => { if (e.pointerType !== "touch") { hover = null; updateTip(); } });
 
+// Zoom: during a gesture only the CSS transform changes; when it settles the worker repaints sharp for the new view.
+let settleTimer, safariPinch = false;
+const stageSel = select(stage);
+const zoomer = zoom().scaleExtent([1, 16])
+  .filter(e => !(safariPinch && e.type === "wheel") && (!e.ctrlKey || e.type === "wheel") && !e.button)
+  .on("start", () => { gesturing = true; map.style.willChange = "transform"; clearTimeout(settleTimer); updateTip(); })
+  .on("zoom", e => { current = e.transform; sync(); })
+  .on("end", () => {
+    gesturing = false;
+    settleTimer = setTimeout(() => sync() ? (map.style.willChange = "", updateTip()) : request(true), 150);
+  });
+stageSel.call(zoomer);
+// Safari sends trackpad pinches as gesture events rather than ctrl+wheel; touch devices go through d3's touch handling.
+if (!("ontouchstart" in window)) {
+  let k0;
+  stage.addEventListener("gesturestart", e => { e.preventDefault(); safariPinch = true; k0 = current.k; });
+  stage.addEventListener("gesturechange", e => { e.preventDefault(); stageSel.call(zoomer.scaleTo, k0 * e.scale, [e.clientX, e.clientY]); });
+  stage.addEventListener("gestureend", e => { e.preventDefault(); safariPinch = false; });
+}
+$("#reset").onclick = () => stageSel.transition().duration(450).call(zoomer.transform, zoomIdentity);
+
 const setMode = m => {
   mode = m;
   document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
-  drawZoneLines(); redraw();
+  drawZoneLines(); update();
 };
 document.querySelectorAll(".seg button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
-$("#time").oninput = e => { minutes = +e.target.value; stopPlay(); redraw(); };
-$("#date").oninput = e => { doy = +e.target.value; redraw(); };
+$("#time").oninput = e => { minutes = +e.target.value; stopPlay(); update(); };
+$("#date").oninput = e => { doy = +e.target.value; update(); };
 
 let last;
 const stopPlay = () => { playing = false; $("#play").textContent = "▶"; $("#play").ariaLabel = "Play"; };
 function tick(t) {
   if (!playing) return;
-  if (last) { minutes = (minutes + (t - last) * 0.09) % 1440; $("#time").value = minutes; draw(); } // 1.5 clock hours per second
+  if (last) { minutes = (minutes + (t - last) * 0.09) % 1440; $("#time").value = minutes; update(); } // 1.5 clock hours per second
   last = t; requestAnimationFrame(tick);
 }
 $("#play").onclick = () => {
@@ -386,43 +354,15 @@ $("#play").onclick = () => {
   playing = true; last = null; $("#play").textContent = "❚❚"; $("#play").ariaLabel = "Pause"; requestAnimationFrame(tick);
 };
 
-setMode(mode);
-// Zoom: CSS-transform the last render during a gesture, then re-render sharp at the new zoom when it ends.
-const map = $("#map"), stageSel = select(stage);
-function render(t) {
-  rendered = t;
-  const s = VW / stage.clientWidth, tx = t.x * s, ty = t.y * s;
-  view = geoAlbersUsa().scale(1300 * t.k).translate([VW / 2 * t.k + tx, VH / 2 * t.k + ty]);
-  document.querySelectorAll(".zoom").forEach(g => g.setAttribute("transform", `translate(${tx},${ty}) scale(${t.k})`));
-  cityEls.forEach(g => g.setAttribute("transform", `translate(${g.dataset.x},${g.dataset.y}) scale(${1 / t.k})`));
-  setup();
-  map.style.transform = "";
-  $("#reset").hidden = t.k === 1;
+function layout() {
+  fitMap();
+  zoomer.translateExtent([[0, 0], [innerWidth, innerHeight]]);
+  if (shown) sync(); else show(screenOf(current));
+  request(true);
 }
-let settleTimer;
-const zoomer = zoom().scaleExtent([1, 12])
-  .filter(e => !e.target.closest("#reset") && (!e.ctrlKey || e.type === "wheel") && !e.button)
-  .on("start", () => { gesturing = true; clearTimeout(settleTimer); updateTip(); })
-  .on("zoom", ({ transform: t }) => {
-    const k = t.k / rendered.k;
-    map.style.transform = `translate(${t.x - rendered.x * k}px,${t.y - rendered.y * k}px) scale(${k})`;
-  })
-  .on("end", ({ transform: t }) => {
-    gesturing = false; updateTip();
-    settleTimer = setTimeout(() => t.k === rendered.k && t.x === rendered.x && t.y === rendered.y || render(t), 250);
-  });
-stageSel.call(zoomer);
-$("#reset").onclick = () => stageSel.transition().duration(450).call(zoomer.transform, zoomIdentity);
-
 let resizeTimer;
-new ResizeObserver(() => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    zoomer.translateExtent([[0, 0], [stage.clientWidth, stage.clientHeight]]);
-    stageSel.property("__zoom", zoomIdentity);
-    render(zoomIdentity);
-  }, 150);
-}).observe(stage);
+new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layout, 120); }).observe($("main"));
+setMode(mode);
 </script>
 </body>
 </html>
