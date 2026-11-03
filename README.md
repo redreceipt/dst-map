@@ -2,7 +2,7 @@
 
 Interactive map of U.S. sunlight at the same local clock time in every time zone. Drag the clock, pick a date, and compare permanent Daylight Saving Time with permanent Standard Time.
 
-**Live:** https://dst-map.vercel.app
+**Live:** https://dstmap.us
 
 ![Map at 8:00 AM on December 21 under permanent DST](og.jpg)
 
